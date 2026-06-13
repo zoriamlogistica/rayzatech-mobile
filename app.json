@@ -1,16 +1,24 @@
 {
   "expo": {
-    "name": "RAYZATECH-MOBILE",
-    "slug": "RAYZATECH-MOBILE",
+    "name": "RAYZATECH",
+    "slug": "rayzatech-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "rayzatechmobile",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/images/icon.png"
     },
     "android": {
+      "package": "com.rayzatech.mobile",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.RECORD_AUDIO"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -25,20 +33,37 @@
     },
     "plugins": [
       "expo-router",
+      "expo-splash-screen",
+      "expo-sqlite",
+      "expo-secure-store",
       [
-        "expo-splash-screen",
+        "expo-image-picker",
         {
-          "backgroundColor": "#208AEF",
-          "android": {
-            "image": "./assets/images/splash-icon.png",
-            "imageWidth": 76
-          }
+          "photosPermission": "RAYZATECH necesita acceder a tus fotos para registrar evidencias.",
+          "cameraPermission": "RAYZATECH necesita usar la cámara para registrar evidencias de gestión."
         }
-      ]
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "RAYZATECH necesita acceder a tu ubicación para validar la gestión en campo.",
+          "locationWhenInUsePermission": "RAYZATECH necesita acceder a tu ubicación para validar la gestión en campo."
+        }
+      ],
+      "expo-camera",
+      "@react-native-community/datetimepicker",
+      "expo-image"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "fd448da8-8833-4845-81c7-362f8c15560a"
+      }
+    },
+    "owner": "osalazar89"
   }
 }

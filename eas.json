@@ -1,0 +1,29 @@
+{
+  "cli": {
+    "version": ">= 15.0.0"
+  },
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_MOBILE_API_BASE_URL": "https://app.rayza-tech.com",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://aetilfgeufsqhayrbrcm.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFldGlsZmdldWZzcWhheXJicmNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4NDg1MDIsImV4cCI6MjA5NDQyNDUwMn0.7mTurLqDo55ffSlLoeOGyi20WVK0mMz8VirwNgTdfl4"
+
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_MOBILE_API_BASE_URL": "https://app.rayza-tech.com",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://aetilfgeufsqhayrbrcm.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFldGlsZmdldWZzcWhheXJicmNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4NDg1MDIsImV4cCI6MjA5NDQyNDUwMn0.7mTurLqDo55ffSlLoeOGyi20WVK0mMz8VirwNgTdfl4"
+      }
+    }
+  }
+}
