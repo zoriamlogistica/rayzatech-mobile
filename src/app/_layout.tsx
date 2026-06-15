@@ -29,6 +29,7 @@ import {
   bootstrapApp,
   type AppBootstrapResult,
 } from '@/application/bootstrap/appBootstrap.service';
+import { AuthBootstrapProvider } from '@/application/auth/authBootstrap.context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
@@ -72,6 +73,19 @@ export default function RootLayout() {
     }
   }
 
+  async function refreshAfterLogin() {
+    const result = await bootstrapApp();
+
+    setBootstrapResult(result);
+
+    if (result.status !== 'ready') {
+      throw new Error(
+        result.error
+          ? `LOGIN_SESSION_NOT_READY:${result.error}`
+          : `LOGIN_SESSION_NOT_READY:${result.status}`
+      );
+    }
+  }
 
   useEffect(() => {
     runBootstrap();
@@ -112,11 +126,15 @@ export default function RootLayout() {
     return;
   }
 
-  if (bootstrapResult.status !== 'auth_required') {
+  if (bootstrapResult.status === 'ready') {
+    if (pathname === '/login') {
+      router.replace('/agent-dashboard' as never);
+    }
+
     return;
   }
 
-  if (pathname === '/login') {
+  if (bootstrapResult.status !== 'auth_required' || pathname === '/login') {
     return;
   }
 
@@ -153,15 +171,17 @@ export default function RootLayout() {
 
   if (bootstrapResult.status === 'auth_required') {
   return (
-    <AppRoot>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-          }}
-        />
-      </ThemeProvider>
-    </AppRoot>
+    <AuthBootstrapProvider refreshAfterLogin={refreshAfterLogin}>
+      <AppRoot>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+            }}
+          />
+        </ThemeProvider>
+      </AppRoot>
+    </AuthBootstrapProvider>
   );
 }
 
@@ -217,17 +237,19 @@ export default function RootLayout() {
   }
 
   return (
-  <AppRoot>
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
+  <AuthBootstrapProvider refreshAfterLogin={refreshAfterLogin}>
+    <AppRoot>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <AnimatedSplashOverlay />
 
-      <Stack
-        screenOptions={{
-          headerShown: false,
-        }}
-      />
-    </ThemeProvider>
-  </AppRoot>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+          }}
+        />
+      </ThemeProvider>
+    </AppRoot>
+  </AuthBootstrapProvider>
 );
 
 }

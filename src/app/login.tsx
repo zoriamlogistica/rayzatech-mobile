@@ -1,6 +1,5 @@
 // src/app/login.tsx
 
-import { router } from 'expo-router';
 import { useState } from 'react';
 import {
     ActivityIndicator,
@@ -16,9 +15,11 @@ import {
 } from 'react-native';
 
 import { loginWithEmailPassword } from '@/application/auth/realAuth.service';
+import { useAuthBootstrap } from '@/application/auth/authBootstrap.context';
 import { classifyFieldError } from '@/application/errors/fieldError.service';
 
 export default function LoginScreen() {
+  const { refreshAfterLogin } = useAuthBootstrap();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -45,7 +46,7 @@ export default function LoginScreen() {
         password,
       });
 
-      router.replace('/agent-dashboard');
+      await refreshAfterLogin();
     } catch (error) {
       const fieldError = classifyFieldError(error);
 
