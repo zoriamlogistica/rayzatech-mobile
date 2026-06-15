@@ -10,6 +10,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { logoutLocalSession } from '@/application/auth/authSession.service';
 import { classifyFieldError } from '@/application/errors/fieldError.service';
@@ -165,7 +166,10 @@ export function AgentSideMenu({ active, onSynced }: AgentSideMenuProps) {
         <View style={styles.modalRoot}>
           <Pressable style={styles.backdrop} onPress={closeMenu} />
 
-          <View style={styles.drawer}>
+          <SafeAreaView
+            style={styles.drawer}
+            edges={['top', 'bottom', 'left']}
+          >
             <View style={styles.drawerHeader}>
               <Text style={styles.drawerTitle}>RAYZATECH</Text>
               <Text style={styles.drawerSubtitle}>Menú del agente</Text>
@@ -211,7 +215,7 @@ export function AgentSideMenu({ active, onSynced }: AgentSideMenuProps) {
   <Text style={styles.closeButtonText}>Cerrar sesión</Text>
 </Pressable>
             </View>
-          </View>
+          </SafeAreaView>
         </View>
       </Modal>
     </>

@@ -17,6 +17,7 @@ import {
 import { loginWithEmailPassword } from '@/application/auth/realAuth.service';
 import { useAuthBootstrap } from '@/application/auth/authBootstrap.context';
 import { classifyFieldError } from '@/application/errors/fieldError.service';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function LoginScreen() {
   const { refreshAfterLogin } = useAuthBootstrap();
@@ -57,11 +58,12 @@ export default function LoginScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.root}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <View style={styles.card}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'right', 'bottom', 'left']}>
+      <KeyboardAvoidingView
+        style={styles.root}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <View style={styles.card}>
         <Image
           source={require('../../assets/images/icon.png')}
           style={styles.logo}
@@ -117,12 +119,17 @@ export default function LoginScreen() {
         </View>
 
         <Text style={styles.footerText}>By Rayza-Tech · v1.6</Text>
-      </View>
-    </KeyboardAvoidingView>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#f5f7f6',
+  },
   root: {
     flex: 1,
     padding: 22,

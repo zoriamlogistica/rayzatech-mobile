@@ -23,6 +23,7 @@ import {
 } from '@/application/tasks/taskQuery.service';
 import { AgentSideMenu } from '@/components/agent-side-menu';
 import { runDevSyncSimulation } from '@/sync/syncEngine';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 type ManagedGroupKey = 'completed' | 'unsuccessful' | 'rescheduled';
 
@@ -211,12 +212,13 @@ export default function AgentManagedTasksScreen() {
   const totalManaged = groups.reduce((total, group) => total + group.tasks.length, 0);
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.container}
-      refreshControl={
-        <RefreshControl refreshing={isLoading} onRefresh={() => loadManagedTasks(searchText)} />
-      }
-    >
+    <SafeAreaView style={styles.safeArea} edges={['top', 'right', 'bottom', 'left']}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        refreshControl={
+          <RefreshControl refreshing={isLoading} onRefresh={() => loadManagedTasks(searchText)} />
+        }
+      >
       <View style={styles.topBar}>
         <AgentSideMenu
           active="managed"
@@ -347,7 +349,8 @@ export default function AgentManagedTasksScreen() {
       <Pressable style={styles.backButton} onPress={() => router.back()}>
         <Text style={styles.backButtonText}>Volver</Text>
       </Pressable>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -369,6 +372,10 @@ function QuickAction({
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
   container: {
     padding: 20,
     gap: 16,

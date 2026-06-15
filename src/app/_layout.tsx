@@ -31,14 +31,22 @@ import {
 } from '@/application/bootstrap/appBootstrap.service';
 import { AuthBootstrapProvider } from '@/application/auth/authBootstrap.context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import {
+  initialWindowMetrics,
+  SafeAreaProvider,
+} from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 
 function AppRoot({ children }: { children: ReactNode }) {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      {children}
-    </GestureHandlerRootView>
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <StatusBar style="dark" />
+        {children}
+      </GestureHandlerRootView>
+    </SafeAreaProvider>
   );
 }
 

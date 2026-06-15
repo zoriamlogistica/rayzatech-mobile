@@ -54,6 +54,7 @@ import {
   useCameraPermissions,
   type BarcodeScanningResult,
 } from 'expo-camera';
+import { SafeAreaView } from 'react-native-safe-area-context';
 const DEVICE_TYPE_OPTIONS = [
   'Decodificador',
   'Modem',
@@ -1434,7 +1435,10 @@ task?.remoteId ? (
   visible={isManagementModalOpen}
   onRequestClose={() => setIsManagementModalOpen(false)}
 >
-  <View style={styles.modalRoot}>
+  <SafeAreaView
+    style={styles.modalRoot}
+    edges={['top', 'right', 'bottom', 'left']}
+  >
     <Pressable
       style={styles.modalBackdrop}
       onPress={() => setIsManagementModalOpen(false)}
@@ -1711,7 +1715,7 @@ task?.remoteId ? (
         </View>
       </ScrollView>
     </View>
-  </View>
+  </SafeAreaView>
 </Modal> 
 
       <OptionPickerModal
@@ -1789,7 +1793,10 @@ task?.remoteId ? (
   visible={!!previewImageUri}
   onRequestClose={() => setPreviewImageUri(null)}
 >
-  <View style={styles.imagePreviewRoot}>
+  <SafeAreaView
+    style={styles.imagePreviewRoot}
+    edges={['top', 'right', 'bottom', 'left']}
+  >
     <Pressable
       style={styles.imagePreviewClose}
       onPress={() => setPreviewImageUri(null)}
@@ -1801,14 +1808,17 @@ task?.remoteId ? (
   <ZoomableImage uri={previewImageUri} />
 ) : null}
 
-  </View>
+  </SafeAreaView>
 </Modal>
 <Modal
   animationType="slide"
   visible={!!scannerDeviceFormId}
   onRequestClose={closeSerialScanner}
 >
-  <View style={styles.scannerRoot}>
+  <SafeAreaView
+    style={styles.scannerRoot}
+    edges={['top', 'right', 'bottom', 'left']}
+  >
     <CameraView
       style={styles.scannerCamera}
       facing="back"
@@ -1841,7 +1851,7 @@ task?.remoteId ? (
         <Text style={styles.scannerCancelText}>Cancelar</Text>
       </Pressable>
     </View>
-  </View>
+  </SafeAreaView>
 </Modal>
     </AgentScreen>
   );
@@ -2010,7 +2020,10 @@ function OptionPickerModal({
       visible={visible}
       onRequestClose={onClose}
     >
-      <View style={styles.modalRoot}>
+      <SafeAreaView
+        style={styles.modalRoot}
+        edges={['top', 'right', 'bottom', 'left']}
+      >
         <Pressable style={styles.modalBackdrop} onPress={onClose} />
 
         <View style={styles.optionPickerCard}>
@@ -2036,7 +2049,7 @@ function OptionPickerModal({
             </Pressable>
           ))}
         </View>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }

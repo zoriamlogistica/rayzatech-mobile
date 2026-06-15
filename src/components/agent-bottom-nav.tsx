@@ -1,7 +1,8 @@
 // src/components/agent-bottom-nav.tsx
 
 import { router, type Href } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 type AgentBottomNavProps = {
   active: 'tasks' | 'managed' | 'profile';
@@ -9,7 +10,7 @@ type AgentBottomNavProps = {
 
 export function AgentBottomNav({ active }: AgentBottomNavProps) {
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
       <NavItem
         label="Tareas"
         isActive={active === 'tasks'}
@@ -27,7 +28,7 @@ export function AgentBottomNav({ active }: AgentBottomNavProps) {
         isActive={active === 'profile'}
         onPress={() => router.push('/agent-profile' as unknown as Href)}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 

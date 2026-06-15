@@ -9,6 +9,7 @@ import {
     Text,
     View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AgentSideMenu } from '@/components/agent-side-menu';
 
@@ -41,7 +42,7 @@ export function AgentScreen({
   onMenuSynced,
 }: AgentScreenProps) {
   return (
-    <View style={styles.root}>
+    <SafeAreaView style={styles.root} edges={['top', 'right', 'bottom', 'left']}>
       <View style={styles.fixedHeader}>
         <AgentSideMenu active={active} onSynced={onMenuSynced} />
 
@@ -83,7 +84,7 @@ export function AgentScreen({
       >
         {children}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
