@@ -45,7 +45,6 @@ function AppRoot({ children }: { children: ReactNode }) {
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const pathname = usePathname();
-  const isLoginRoute = pathname === '/login';
 
   const [bootstrapResult, setBootstrapResult] =
     useState<AppBootstrapResult | null>(null);
