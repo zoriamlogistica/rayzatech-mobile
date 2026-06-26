@@ -466,18 +466,6 @@ export const migrations: Migration[] = [
   {
     version: 8,
     name: 'last_mile_task_fields',
-    sql: `
-      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS route_number TEXT;
-      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS guide_number TEXT;
-      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS field_operation_type TEXT DEFAULT 'inverse';
-      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS last_mile_task_type TEXT;
-      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS service_area TEXT;
-      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS contact_data TEXT;
-      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS package_count INTEGER;
-      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS delivery_instructions TEXT;
-      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS merchandise_condition TEXT;
-      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS liquidation_status TEXT DEFAULT 'none';
-      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS has_pending_liquidation INTEGER DEFAULT 0;
-    `,
+    sql: ``,
   },
 ];

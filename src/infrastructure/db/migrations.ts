@@ -39,6 +39,85 @@ async function markMigrationAsApplied(
   );
 }
 
+async function getTableColumns(
+  db: SQLiteDatabase,
+  tableName: string
+): Promise<Set<string>> {
+  const rows = await db.getAllAsync<{ name: string }>(
+    `PRAGMA table_info(${tableName});`
+  );
+
+  return new Set(rows.map((row) => row.name));
+}
+
+async function addColumnIfMissing(params: {
+  db: SQLiteDatabase;
+  tableName: string;
+  columnName: string;
+  definition: string;
+  existingColumns: Set<string>;
+}): Promise<void> {
+  if (params.existingColumns.has(params.columnName)) {
+    return;
+  }
+
+  await params.db.execAsync(
+    `ALTER TABLE ${params.tableName} ADD COLUMN ${params.columnName} ${params.definition};`
+  );
+
+  params.existingColumns.add(params.columnName);
+}
+
+async function applyLastMileTaskFieldsMigration(
+  db: SQLiteDatabase
+): Promise<void> {
+  const existingColumns = await getTableColumns(db, 'tasks');
+  const columns: { columnName: string; definition: string }[] = [
+    { columnName: 'route_number', definition: 'TEXT' },
+    { columnName: 'guide_number', definition: 'TEXT' },
+    {
+      columnName: 'field_operation_type',
+      definition: "TEXT DEFAULT 'inverse'",
+    },
+    { columnName: 'last_mile_task_type', definition: 'TEXT' },
+    { columnName: 'service_area', definition: 'TEXT' },
+    { columnName: 'contact_data', definition: 'TEXT' },
+    { columnName: 'package_count', definition: 'INTEGER' },
+    { columnName: 'delivery_instructions', definition: 'TEXT' },
+    { columnName: 'merchandise_condition', definition: 'TEXT' },
+    {
+      columnName: 'liquidation_status',
+      definition: "TEXT DEFAULT 'none'",
+    },
+    {
+      columnName: 'has_pending_liquidation',
+      definition: 'INTEGER DEFAULT 0',
+    },
+  ];
+
+  for (const column of columns) {
+    await addColumnIfMissing({
+      db,
+      tableName: 'tasks',
+      columnName: column.columnName,
+      definition: column.definition,
+      existingColumns,
+    });
+  }
+}
+
+async function applyCustomMigrationIfNeeded(
+  db: SQLiteDatabase,
+  version: number
+): Promise<boolean> {
+  if (version === 8) {
+    await applyLastMileTaskFieldsMigration(db);
+    return true;
+  }
+
+  return false;
+}
+
 export async function runMigrations(db: SQLiteDatabase): Promise<void> {
   await ensureMigrationsTable(db);
 
@@ -52,7 +131,15 @@ export async function runMigrations(db: SQLiteDatabase): Promise<void> {
   for (const migration of pendingMigrations) {
     try {
       await db.execAsync('BEGIN TRANSACTION;');
-      await db.execAsync(migration.sql);
+      const customApplied = await applyCustomMigrationIfNeeded(
+        db,
+        migration.version
+      );
+
+      if (!customApplied && migration.sql.trim()) {
+        await db.execAsync(migration.sql);
+      }
+
       await markMigrationAsApplied(db, migration.version, migration.name);
       await db.execAsync('COMMIT;');
     } catch (error) {
