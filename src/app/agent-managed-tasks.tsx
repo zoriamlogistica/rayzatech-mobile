@@ -17,6 +17,7 @@ import {
 import { classifyFieldError } from '@/application/errors/fieldError.service';
 import { appLogger } from '@/application/logging/appLogger.service';
 import { downloadDevTasksToLocalCache } from '@/application/tasks/taskDownload.service';
+import { getSelectedFieldOperation } from '@/application/tasks/operationSelection.service';
 import {
   listCachedTasks,
   type TaskListItem,
@@ -37,6 +38,7 @@ type ManagedGroup = {
 export default function AgentManagedTasksScreen() {
   const [groups, setGroups] = useState<ManagedGroup[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const selectedOperation = getSelectedFieldOperation() ?? 'inverse';
   const [searchText, setSearchText] = useState('');
   const [expandedGroups, setExpandedGroups] = useState<Record<ManagedGroupKey, boolean>>({
     completed: true,
@@ -65,6 +67,7 @@ export default function AgentManagedTasksScreen() {
 
       const allTasks = await listCachedTasks({
         search: search.trim() || undefined,
+        fieldOperationType: selectedOperation,
       });
 
       const completed = allTasks.filter((task) => task.status === 'completed');
@@ -96,7 +99,7 @@ export default function AgentManagedTasksScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [searchText]);
+  }, [searchText, selectedOperation]);
 
   useEffect(() => {
     loadManagedTasks('');

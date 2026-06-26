@@ -105,10 +105,17 @@ export type AgentTaskSummary = {
     rescheduled: number;
     cancelled: number;
   };
+  partialTasks: number;
+  effectivenessGeneral: number;
   pendingSyncItems: number;
   dirtyTasks: number;
   conflictedTasks: number;
   lockedTasks: number;
+};
+
+export type AgentOperationAvailability = {
+  inverse: number;
+  lastMile: number;
 };
 
 function normalize(value?: string | null): string {
@@ -354,15 +361,73 @@ export async function getAgentTaskSummary(filter?: {
     cancelled: visibleTasks.filter((task) => task.status === 'cancelled').length,
   };
 
+  const latestManagements = await Promise.all(
+    visibleTasks.map(async (task) => {
+      const managements = await listTaskManagementsByTask(task.id);
+      return managements[0] ?? null;
+    })
+  );
+
+  const partialTasks = latestManagements.filter((management) =>
+    [
+      management?.reason,
+      management?.observation,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .includes('parcial')
+  ).length;
+
+  const effectiveTasks = byStatus.completed + partialTasks;
+  const effectivenessGeneral =
+    visibleTasks.length > 0
+      ? Math.round((effectiveTasks / visibleTasks.length) * 100)
+      : 0;
+
   const pendingSyncItems = await countPendingSyncItems();
 
   return {
     totalTasks: visibleTasks.length,
     byStatus,
+    partialTasks,
+    effectivenessGeneral,
     pendingSyncItems,
     dirtyTasks: visibleTasks.filter((task) => task.isDirty).length,
     conflictedTasks: visibleTasks.filter((task) => task.syncStatus === 'conflict')
       .length,
     lockedTasks: visibleTasks.filter((task) => task.isLocked).length,
+  };
+}
+
+export async function getAgentOperationAvailability(): Promise<AgentOperationAvailability> {
+  const tasks = await listTasks();
+  const activeSession = await getActiveLocalSession();
+  const activeAgentId = activeSession?.agentId ?? activeSession?.userId;
+  const todayLima = getTodayLimaDate();
+
+  const visibleTasks = tasks.filter((task) => {
+    if (
+      activeAgentId &&
+      task.assignedUserId &&
+      task.assignedUserId !== activeAgentId
+    ) {
+      return false;
+    }
+
+    if (task.scheduledDate !== todayLima && !task.hasPendingLiquidation) {
+      return false;
+    }
+
+    return true;
+  });
+
+  return {
+    inverse: visibleTasks.filter(
+      (task) => (task.fieldOperationType ?? 'inverse') === 'inverse'
+    ).length,
+    lastMile: visibleTasks.filter(
+      (task) => task.fieldOperationType === 'last_mile'
+    ).length,
   };
 }

@@ -38,6 +38,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
+import { getSelectedFieldOperation } from '@/application/tasks/operationSelection.service';
 
 function AppRoot({ children }: { children: ReactNode }) {
   return (
@@ -135,7 +136,15 @@ export default function RootLayout() {
 
   if (bootstrapResult.status === 'ready') {
     if (pathname === '/login') {
-      router.replace('/agent-dashboard' as never);
+      router.replace('/agent-operation-select' as never);
+      return;
+    }
+
+    if (
+      !getSelectedFieldOperation() &&
+      pathname !== '/agent-operation-select'
+    ) {
+      router.replace('/agent-operation-select' as never);
     }
 
     return;

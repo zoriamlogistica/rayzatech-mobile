@@ -3,6 +3,7 @@
 import { classifyFieldError } from '@/application/errors/fieldError.service';
 import { appLogger } from '@/application/logging/appLogger.service';
 import { downloadDevTasksToLocalCache } from '@/application/tasks/taskDownload.service';
+import { getSelectedFieldOperation } from '@/application/tasks/operationSelection.service';
 import {
   listCachedTasks,
   type TaskListItem,
@@ -24,7 +25,6 @@ import {
 } from 'react-native';
 
 type TaskFilter = 'pending' | 'in_progress' | 'completed' | 'all';
-type OperationFilter = 'inverse' | 'last_mile';
 
 type CompletedGroupKey = 'completed' | 'unsuccessful' | 'rescheduled';
 
@@ -47,7 +47,7 @@ export default function AgentTasksScreen() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState<TaskFilter>('pending');
-  const [operationFilter, setOperationFilter] = useState<OperationFilter>('inverse');
+  const selectedOperation = getSelectedFieldOperation() ?? 'inverse';
   const [searchText, setSearchText] = useState('');
   const [pendingLiquidationCount, setPendingLiquidationCount] = useState(0);
 
@@ -90,7 +90,7 @@ export default function AgentTasksScreen() {
     async (
       filter: TaskFilter = activeFilter,
       search: string = searchText,
-      operation: OperationFilter = operationFilter
+      operation = selectedOperation
     ) => {
       try {
         setIsLoading(true);
@@ -132,7 +132,7 @@ export default function AgentTasksScreen() {
         setIsLoading(false);
       }
     },
-    [activeFilter, operationFilter, searchText]
+    [activeFilter, selectedOperation, searchText]
   );
 
   useEffect(() => {
@@ -142,7 +142,7 @@ export default function AgentTasksScreen() {
 useFocusEffect(
   useCallback(() => {
     loadTasks(activeFilter, searchText);
-  }, [loadTasks, activeFilter, operationFilter, searchText])
+  }, [loadTasks, activeFilter, searchText])
 );
 
   async function syncNow() {
@@ -156,7 +156,7 @@ useFocusEffect(
         forceFail: false,
       });
 
-      await loadTasks(activeFilter, searchText, operationFilter);
+      await loadTasks(activeFilter, searchText, selectedOperation);
 
       Alert.alert(
         'Sincronización finalizada',
@@ -283,12 +283,7 @@ async function openMap(task: TaskListItem) {
 
   function applySearch(text: string) {
     setSearchText(text);
-    loadTasks(activeFilter, text, operationFilter);
-  }
-
-  function changeOperationFilter(nextOperation: OperationFilter) {
-    setOperationFilter(nextOperation);
-    loadTasks(activeFilter, searchText, nextOperation);
+    loadTasks(activeFilter, text, selectedOperation);
   }
 
   function toggleGroup(groupKey: CompletedGroupKey) {
@@ -309,10 +304,10 @@ async function openMap(task: TaskListItem) {
       title="Mis tareas"
       subtitle="Tareas pendientes por ruta"
       isRefreshing={isLoading}
-      onRefresh={() => loadTasks(activeFilter, searchText, operationFilter)}
+      onRefresh={() => loadTasks(activeFilter, searchText, selectedOperation)}
       isSyncing={isLoading}
       onSyncPress={syncNow}
-      onMenuSynced={() => loadTasks(activeFilter, searchText, operationFilter)}
+      onMenuSynced={() => loadTasks(activeFilter, searchText, selectedOperation)}
     >
       <TextInput
         value={searchText}
@@ -322,29 +317,16 @@ async function openMap(task: TaskListItem) {
         autoCapitalize="none"
       />
 
-      <View style={styles.operationSelector}>
-        <OperationChip
-          label="Logistica inversa"
-          active={operationFilter === 'inverse'}
-          onPress={() => changeOperationFilter('inverse')}
-        />
-        <OperationChip
-          label="Ultima milla"
-          active={operationFilter === 'last_mile'}
-          onPress={() => changeOperationFilter('last_mile')}
-        />
-      </View>
-
       <View style={styles.filterContainer}>
         <FilterChip
           label="Pendientes"
           active={activeFilter === 'pending'}
-          onPress={() => loadTasks('pending', searchText, operationFilter)}
+          onPress={() => loadTasks('pending', searchText, selectedOperation)}
         />
         <FilterChip
           label="En progreso"
           active={activeFilter === 'in_progress'}
-          onPress={() => loadTasks('in_progress', searchText, operationFilter)}
+          onPress={() => loadTasks('in_progress', searchText, selectedOperation)}
         />
       </View>
 
@@ -510,32 +492,6 @@ function FilterChip({
   );
 }
 
-function OperationChip({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={[styles.operationChip, active ? styles.operationChipActive : null]}
-    >
-      <Text
-        style={[
-          styles.operationChipText,
-          active ? styles.operationChipTextActive : null,
-        ]}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 function TaskCard({
   task,
   getStatusLabel,
@@ -666,32 +622,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 14,
     backgroundColor: '#fff',
-  },
-  operationSelector: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  operationChip: {
-    flex: 1,
-    paddingVertical: 11,
-    paddingHorizontal: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#DDE3EA',
-    backgroundColor: '#fff',
-    alignItems: 'center',
-  },
-  operationChipActive: {
-    borderColor: '#137333',
-    backgroundColor: '#E8F5EE',
-  },
-  operationChipText: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#4B5563',
-  },
-  operationChipTextActive: {
-    color: '#137333',
   },
   filterContainer: {
     flexDirection: 'row',

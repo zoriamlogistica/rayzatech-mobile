@@ -8,6 +8,7 @@ import { classifyFieldError } from '@/application/errors/fieldError.service';
 import { appLogger } from '@/application/logging/appLogger.service';
 import { downloadDevTasksToLocalCache } from '@/application/tasks/taskDownload.service';
 import { getAgentTaskSummary } from '@/application/tasks/taskQuery.service';
+import { getSelectedFieldOperation } from '@/application/tasks/operationSelection.service';
 import { AgentScreen } from '@/components/agent-screen';
 import { getSyncQueueCounters } from '@/infrastructure/db/repositories/syncQueueRepository';
 import { addAutoSyncListener } from '@/sync/autoSyncService';
@@ -20,6 +21,8 @@ type DashboardState = {
   completed: number;
   rescheduled: number;
   unsuccessful: number;
+  partials: number;
+  effectivenessGeneral: number;
   sync: {
     totalPending: number;
     eligible: number;
@@ -29,16 +32,16 @@ type DashboardState = {
   loadedAt: string;
 };
 
-type OperationFilter = 'inverse' | 'last_mile';
-
 function emptyDashboardState(): DashboardState {
   return {
   totalTasks: 0,
   pending: 0,
   inProgress: 0,
-  completed: 0,
-  rescheduled: 0,
-  unsuccessful: 0,
+completed: 0,
+rescheduled: 0,
+unsuccessful: 0,
+partials: 0,
+effectivenessGeneral: 0,
     sync: {
       totalPending: 0,
       eligible: 0,
@@ -70,7 +73,7 @@ export default function AgentDashboardScreen() {
     emptyDashboardState()
   );
   const [isLoading, setIsLoading] = useState(false);
-  const [operationFilter, setOperationFilter] = useState<OperationFilter>('inverse');
+  const selectedOperation = getSelectedFieldOperation() ?? 'inverse';
 
   async function handleError(error: unknown) {
     const fieldError = classifyFieldError(error);
@@ -92,7 +95,7 @@ export default function AgentDashboardScreen() {
       setIsLoading(true);
 
       const summary = await getAgentTaskSummary({
-        fieldOperationType: operationFilter,
+        fieldOperationType: selectedOperation,
       });
       const syncCounters = await getSyncQueueCounters();
 
@@ -103,6 +106,8 @@ inProgress: summary.byStatus.inProgress,
 completed: summary.byStatus.completed,
 rescheduled: summary.byStatus.rescheduled,
 unsuccessful: summary.byStatus.unsuccessful,
+partials: summary.partialTasks,
+effectivenessGeneral: summary.effectivenessGeneral,
   sync: syncCounters,
   loadedAt: new Date().toISOString(),
 });
@@ -111,7 +116,7 @@ unsuccessful: summary.byStatus.unsuccessful,
     } finally {
       setIsLoading(false);
     }
-  }, [operationFilter]);
+  }, [selectedOperation]);
 
   useEffect(() => {
     loadDashboard();
@@ -165,7 +170,7 @@ unsuccessful: summary.byStatus.unsuccessful,
   }
 
   const isSynced = dashboard.sync.totalPending === 0;
-  const isLastMile = operationFilter === 'last_mile';
+  const isLastMile = selectedOperation === 'last_mile';
 
   return (
     <AgentScreen
@@ -178,19 +183,6 @@ unsuccessful: summary.byStatus.unsuccessful,
       onSyncPress={syncNow}
       onMenuSynced={loadDashboard}
     >
-      <View style={styles.operationSelector}>
-        <OperationChip
-          label="Logistica inversa"
-          active={operationFilter === 'inverse'}
-          onPress={() => setOperationFilter('inverse')}
-        />
-        <OperationChip
-          label="Ultima milla"
-          active={operationFilter === 'last_mile'}
-          onPress={() => setOperationFilter('last_mile')}
-        />
-      </View>
-
       <View
         style={[
           styles.statusCard,
@@ -243,6 +235,47 @@ unsuccessful: summary.byStatus.unsuccessful,
           </Pressable>
         </View>
 
+        {isLastMile ? (
+        <View style={styles.metricsGrid}>
+          <MetricCard
+            label="Total"
+            value={dashboard.totalTasks}
+            icon="□"
+            tone="blue"
+          />
+          <MetricCard
+            label="Pendientes"
+            value={dashboard.pending}
+            icon="⏱"
+            tone="amber"
+          />
+          <MetricCard
+            label="Exitosas"
+            value={dashboard.completed}
+            icon="✓"
+            tone="green"
+          />
+          <MetricCard
+            label="No exitoso"
+            value={dashboard.unsuccessful}
+            icon="×"
+            tone="red"
+          />
+          <MetricCard
+            label="Parciales"
+            value={dashboard.partials}
+            icon="½"
+            tone="amber"
+          />
+          <MetricCard
+            label="Efectividad"
+            value={dashboard.effectivenessGeneral}
+            suffix="%"
+            icon="%"
+            tone="green"
+          />
+        </View>
+        ) : (
         <View style={styles.metricsGrid}>
           <MetricCard
   label="Total"
@@ -281,6 +314,7 @@ unsuccessful: summary.byStatus.unsuccessful,
   tone="red"
 />
         </View>
+        )}
       </View>
 
       <View style={styles.syncMiniCard}>
@@ -302,11 +336,13 @@ function MetricCard({
   value,
   icon,
   tone,
+  suffix = '',
 }: {
   label: string;
   value: number;
   icon: string;
   tone: 'blue' | 'amber' | 'green' | 'red' | 'purple';
+  suffix?: string;
 }) {
   const toneStyle = {
     blue: {
@@ -337,7 +373,7 @@ function MetricCard({
         <Text style={styles.metricIcon}>{icon}</Text>
       </View>
 
-      <Text style={[styles.metricValue, toneStyle.value]}>{value}</Text>
+      <Text style={[styles.metricValue, toneStyle.value]}>{value}{suffix}</Text>
       <Text numberOfLines={1} style={styles.metricLabel}>
         {label}
       </Text>
@@ -354,59 +390,7 @@ function MiniSync({ label, value }: { label: string; value: number }) {
   );
 }
 
-function OperationChip({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={[styles.operationChip, active ? styles.operationChipActive : null]}
-    >
-      <Text
-        style={[
-          styles.operationChipText,
-          active ? styles.operationChipTextActive : null,
-        ]}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
-  operationSelector: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  operationChip: {
-    flex: 1,
-    paddingVertical: 11,
-    paddingHorizontal: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#DDE3EA',
-    backgroundColor: '#fff',
-    alignItems: 'center',
-  },
-  operationChipActive: {
-    borderColor: '#137333',
-    backgroundColor: '#E8F5EE',
-  },
-  operationChipText: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#4B5563',
-  },
-  operationChipTextActive: {
-    color: '#137333',
-  },
   statusCard: {
     flexDirection: 'row',
     alignItems: 'center',

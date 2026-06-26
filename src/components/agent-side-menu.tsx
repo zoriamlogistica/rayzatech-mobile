@@ -189,6 +189,12 @@ export function AgentSideMenu({ active, onSynced }: AgentSideMenuProps) {
               />
 
               <MenuItem
+                label="Cambiar operacion"
+                isActive={false}
+                onPress={() => goTo('/agent-operation-select')}
+              />
+
+              <MenuItem
                 label="Mi perfil"
                 isActive={active === 'profile'}
                 onPress={() => goTo('/agent-profile')}
