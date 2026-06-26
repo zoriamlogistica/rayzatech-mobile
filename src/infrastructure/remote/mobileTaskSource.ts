@@ -14,6 +14,17 @@ type MobileTaskApiItem = {
   orderCode?: string;
   project?: string;
   sot?: string;
+  routeNumber?: string;
+  guideNumber?: string;
+  fieldOperationType?: RemoteTaskDto['fieldOperationType'];
+  lastMileTaskType?: RemoteTaskDto['lastMileTaskType'];
+  serviceArea?: string;
+  contactData?: string;
+  packageCount?: number;
+  deliveryInstructions?: string;
+  merchandiseCondition?: string;
+  liquidationStatus?: RemoteTaskDto['liquidationStatus'];
+  hasPendingLiquidation?: boolean;
   scheduledDate?: string;
   scheduledStart?: string;
   scheduledEnd?: string;
@@ -73,6 +84,17 @@ function normalizeMobileTask(task: MobileTaskApiItem): RemoteTaskDto {
     orderCode: task.orderCode,
     project: task.project,
     sot: task.sot,
+    routeNumber: task.routeNumber,
+    guideNumber: task.guideNumber,
+    fieldOperationType: task.fieldOperationType,
+    lastMileTaskType: task.lastMileTaskType,
+    serviceArea: task.serviceArea,
+    contactData: task.contactData,
+    packageCount: task.packageCount,
+    deliveryInstructions: task.deliveryInstructions,
+    merchandiseCondition: task.merchandiseCondition,
+    liquidationStatus: task.liquidationStatus,
+    hasPendingLiquidation: task.hasPendingLiquidation,
 
     assignedUserId: task.assignedUserId,
 

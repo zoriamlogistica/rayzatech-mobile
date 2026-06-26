@@ -34,6 +34,7 @@ export type TaskListFilter = {
   status?: Task['status'];
   scheduledDate?: string;
   search?: string;
+  fieldOperationType?: Task['fieldOperationType'];
 };
 
 export type TaskListItem = {
@@ -42,6 +43,13 @@ export type TaskListItem = {
   taskNumber?: string;
   orderCode?: string;
   project?: string;
+  routeNumber?: string;
+  guideNumber?: string;
+  fieldOperationType?: Task['fieldOperationType'];
+  lastMileTaskType?: Task['lastMileTaskType'];
+  packageCount?: number;
+  liquidationStatus?: Task['liquidationStatus'];
+  hasPendingLiquidation?: boolean;
   customerName?: string;
   customerDocument?: string;
   customerPhone?: string;
@@ -128,6 +136,8 @@ function matchesSearch(task: Task, search?: string): boolean {
     task.orderCode,
     task.project,
     task.sot,
+    task.routeNumber,
+    task.guideNumber,
     task.customerName,
     task.customerDocument,
     task.customerPhone,
@@ -151,6 +161,13 @@ function mapTaskToListItem(task: Task): TaskListItem {
     taskNumber: task.taskNumber,
     orderCode: task.orderCode,
     project: task.project,
+    routeNumber: task.routeNumber,
+    guideNumber: task.guideNumber,
+    fieldOperationType: task.fieldOperationType,
+    lastMileTaskType: task.lastMileTaskType,
+    packageCount: task.packageCount,
+    liquidationStatus: task.liquidationStatus,
+    hasPendingLiquidation: task.hasPendingLiquidation,
     customerName: task.customerName,
     customerDocument: task.customerDocument,
     customerPhone: task.customerPhone,
@@ -194,9 +211,16 @@ export async function listCachedTasks(
         return false;
       }
 
+      if (
+        filter?.fieldOperationType &&
+        (task.fieldOperationType ?? 'inverse') !== filter.fieldOperationType
+      ) {
+        return false;
+      }
+
       const scheduledDate = filter?.scheduledDate ?? getTodayLimaDate();
 
-      if (task.scheduledDate !== scheduledDate) {
+      if (task.scheduledDate !== scheduledDate && !task.hasPendingLiquidation) {
         return false;
       }
 
@@ -287,7 +311,9 @@ const evidenceCounters = await countEvidencesByTask(taskId);
   };
 }
 
-export async function getAgentTaskSummary(): Promise<AgentTaskSummary> {
+export async function getAgentTaskSummary(filter?: {
+  fieldOperationType?: Task['fieldOperationType'];
+}): Promise<AgentTaskSummary> {
   const tasks = await listTasks();
   const activeSession = await getActiveLocalSession();
   const activeAgentId = activeSession?.agentId ?? activeSession?.userId;
@@ -302,7 +328,14 @@ export async function getAgentTaskSummary(): Promise<AgentTaskSummary> {
       return false;
     }
 
-    if (task.scheduledDate !== todayLima) {
+    if (task.scheduledDate !== todayLima && !task.hasPendingLiquidation) {
+      return false;
+    }
+
+    if (
+      filter?.fieldOperationType &&
+      (task.fieldOperationType ?? 'inverse') !== filter.fieldOperationType
+    ) {
       return false;
     }
 

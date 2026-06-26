@@ -25,11 +25,20 @@ import {
   createUnsuccessfulManagementWorkflowOffline,
 } from '@/application/tasks/taskManagementWorkflow.service';
 import {
+  createSuccessfulManagementOffline,
+  createUnsuccessfulManagementOffline,
+} from '@/application/tasks/taskManagement.service';
+import {
   getTaskDetailSnapshot,
   type TaskDetailSnapshot,
 } from '@/application/tasks/taskQuery.service';
 import { AgentScreen } from '@/components/agent-screen';
 import type { RecoveredDeviceType } from '@/domain/tasks/recoveredDevice.types';
+import {
+  LAST_MILE_DELIVERY_RESULTS,
+  LAST_MILE_PICKUP_RESULTS,
+  MERCHANDISE_CONDITIONS,
+} from '@/domain/tasks/lastMile.types';
 import {
   RESCHEDULE_REASONS,
   UNSUCCESSFUL_REASONS,
@@ -80,6 +89,16 @@ type DeviceForm = {
 
 const MAX_DEVICES_PER_MANAGEMENT = 10;
 const MAX_RECOMMENDED_EVIDENCE_SIZE_BYTES = 2 * 1024 * 1024;
+
+type LastMileResultKey =
+  | keyof typeof LAST_MILE_DELIVERY_RESULTS
+  | keyof typeof LAST_MILE_PICKUP_RESULTS;
+
+type LastMileResultOption = {
+  key: LastMileResultKey;
+  label: string;
+  substates: readonly string[];
+};
 
 function createDeviceForm(): DeviceForm {
   return {
@@ -198,6 +217,44 @@ function getTaskStatusLabel(status?: string): string {
   if (status === 'cancelled') return 'Cancelada';
 
   return status ?? '-';
+}
+
+function isLastMileTask(
+  task?: { fieldOperationType?: string; taskType?: string } | null
+) {
+  return (
+    task?.fieldOperationType === 'last_mile' ||
+    task?.taskType === 'last_mile_delivery' ||
+    task?.taskType === 'last_mile_pickup'
+  );
+}
+
+function isLastMilePickup(
+  task?: { lastMileTaskType?: string; taskType?: string } | null
+) {
+  return task?.lastMileTaskType === 'pickup' || task?.taskType === 'last_mile_pickup';
+}
+
+function getLastMileTaskLabel(task?: {
+  lastMileTaskType?: string;
+  taskType?: string;
+} | null) {
+  return isLastMilePickup(task) ? 'Recojo' : 'Entrega';
+}
+
+function getLastMileResultOptions(task?: {
+  lastMileTaskType?: string;
+  taskType?: string;
+} | null): LastMileResultOption[] {
+  const source = isLastMilePickup(task)
+    ? LAST_MILE_PICKUP_RESULTS
+    : LAST_MILE_DELIVERY_RESULTS;
+
+  return Object.entries(source).map(([key, value]) => ({
+    key: key as LastMileResultKey,
+    label: value.label,
+    substates: value.substates,
+  }));
 }
 
 function getManagementStatusLabel(status: string): string {
@@ -338,9 +395,22 @@ export default function AgentTaskDetailScreen() {
   const [isRescheduleDateModalOpen, setIsRescheduleDateModalOpen] =
     useState(false);
   const [isTimeRangeModalOpen, setIsTimeRangeModalOpen] = useState(false);
+  const [isLastMileResultModalOpen, setIsLastMileResultModalOpen] =
+    useState(false);
+  const [isLastMileSubstateModalOpen, setIsLastMileSubstateModalOpen] =
+    useState(false);
+  const [isMerchandiseConditionModalOpen, setIsMerchandiseConditionModalOpen] =
+    useState(false);
 
   const [previewImageUri, setPreviewImageUri] = useState<string | null>(null);
   const [managementObservation, setManagementObservation] = useState('');
+  const [lastMileResultKey, setLastMileResultKey] =
+    useState<LastMileResultKey>('delivered');
+  const [lastMileSubstate, setLastMileSubstate] = useState('');
+  const [lastMilePackageCount, setLastMilePackageCount] = useState('');
+  const [lastMileOperationNumber, setLastMileOperationNumber] = useState('');
+  const [lastMileMerchandiseCondition, setLastMileMerchandiseCondition] =
+    useState<string>(MERCHANDISE_CONDITIONS[2]);
   const [deviceForms, setDeviceForms] = useState<DeviceForm[]>([
   createDeviceForm(),
 ]);
@@ -475,8 +545,20 @@ async function syncImmediatelyAfterManagement(): Promise<boolean> {
   }, [loadDetail]);
 
   function resetManagementForm() {
+    const lastMileOptions = getLastMileResultOptions(snapshot?.task);
+    const defaultLastMileResult = lastMileOptions[0];
+
     setSelectedStatus('successful');
     setManagementObservation('');
+    setLastMileResultKey(defaultLastMileResult?.key ?? 'delivered');
+    setLastMileSubstate(defaultLastMileResult?.substates[0] ?? '');
+    setLastMilePackageCount(
+      snapshot?.task?.packageCount == null
+        ? ''
+        : String(snapshot.task.packageCount)
+    );
+    setLastMileOperationNumber('');
+    setLastMileMerchandiseCondition(MERCHANDISE_CONDITIONS[2]);
     setDeviceForms([
   {
     ...createDeviceForm(),
@@ -1145,9 +1227,111 @@ async function openCustomerMap() {
   )}`;
 
   await Linking.openURL(url);
-}
+  }
+
+  async function saveLastMileManagement() {
+    if (!taskId || !snapshot?.task) {
+      return;
+    }
+
+    const resultOptions = getLastMileResultOptions(snapshot.task);
+    const resultOption = resultOptions.find(
+      (option) => option.key === lastMileResultKey
+    );
+    const isUnsuccessful =
+      lastMileResultKey === 'not_delivered' ||
+      lastMileResultKey === 'not_picked_up';
+    const evidenceId = isUnsuccessful ? houseFrontEvidenceId : generalEvidenceId;
+
+    if (!lastMileSubstate) {
+      Alert.alert('Subestado requerido', 'Selecciona el subestado de la gestion.');
+      return;
+    }
+
+    if (!evidenceId) {
+      Alert.alert(
+        'Evidencia requerida',
+        isUnsuccessful
+          ? 'Debes tomar la foto de fachada antes de confirmar.'
+          : 'Debes tomar la evidencia de entrega o recojo antes de confirmar.'
+      );
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+
+      const location = await captureCurrentLocation();
+      const observationParts = [
+        `Resultado ultima milla: ${resultOption?.label ?? lastMileResultKey}`,
+        `Subestado: ${lastMileSubstate}`,
+        `Condicion mercaderia: ${lastMileMerchandiseCondition}`,
+        lastMilePackageCount
+          ? `Cantidad bultos/items gestionados: ${lastMilePackageCount}`
+          : null,
+        lastMileOperationNumber
+          ? `Numero operacion: ${lastMileOperationNumber}`
+          : null,
+        managementObservation
+          ? `Observaciones agente: ${managementObservation}`
+          : null,
+      ].filter(Boolean);
+
+      if (isUnsuccessful) {
+        await createUnsuccessfulManagementOffline({
+          taskId,
+          reason: lastMileSubstate as any,
+          observation: observationParts.join('\n'),
+          latitude: location.latitude,
+          longitude: location.longitude,
+          accuracy: location.accuracy,
+          mocked: location.mocked,
+          generalEvidenceId: evidenceId,
+          managedBy: 'dev_agent_001',
+        });
+      } else {
+        await createSuccessfulManagementOffline({
+          taskId,
+          observation: observationParts.join('\n'),
+          latitude: location.latitude,
+          longitude: location.longitude,
+          accuracy: location.accuracy,
+          mocked: location.mocked,
+          generalEvidenceId: evidenceId,
+          managedBy: 'dev_agent_001',
+        });
+      }
+
+      setIsManagementModalOpen(false);
+      resetManagementForm();
+
+      const synced = await syncImmediatelyAfterManagement();
+
+      Alert.alert(
+        'Gestion registrada',
+        synced
+          ? 'La gestion de ultima milla fue registrada y sincronizada.'
+          : 'La gestion quedo guardada en el telefono y pendiente de sincronizar.'
+      );
+
+      await loadDetail();
+    } catch (error) {
+      await handleError(error);
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   const task = snapshot?.task;
+  const taskIsLastMile = isLastMileTask(task);
+  const lastMileResultOptions = getLastMileResultOptions(task);
+  const selectedLastMileResult =
+    lastMileResultOptions.find((option) => option.key === lastMileResultKey) ??
+    lastMileResultOptions[0];
+  const lastMileSubstateOptions = selectedLastMileResult?.substates ?? [];
+  const lastMileIsUnsuccessful =
+    lastMileResultKey === 'not_delivered' ||
+    lastMileResultKey === 'not_picked_up';
 
   return (
     <AgentScreen
@@ -1189,16 +1373,58 @@ async function openCustomerMap() {
               </Text>
             </View>
 
+            {task.hasPendingLiquidation ? (
+              <Text style={styles.liquidationWarning}>
+                Pedido con items pendiente de liquidar
+              </Text>
+            ) : null}
+
             <View style={styles.detailList}>
-              <DetailRow label="NUMERO_TAREA" value={task.taskNumber ?? task.id} />
-              <DetailRow label="PROYECTO" value={task.project} />
-              <DetailRow label="SOT" value={task.sot} />
-              <DetailRow label="FECHA_PROGRAMADA" value={task.scheduledDate} />
-              <DetailRow label="RANGO_HORARIO" value={task.timeRange} />
-              <DetailRow label="TIPO_TAREA" value={task.taskType} />
+              {taskIsLastMile ? (
+                <>
+                  <DetailRow label="TIPO OPERACION" value="Ultima milla" />
+                  <DetailRow label="TIPO TAREA" value={getLastMileTaskLabel(task)} />
+                  <DetailRow label="NUMERO PEDIDO" value={task.taskNumber ?? task.id} />
+                  <DetailRow label="CUENTA" value={task.orderCode} />
+                  <DetailRow label="PROYECTO" value={task.project} />
+                  <DetailRow label="NUMERO RUTA" value={task.routeNumber} />
+                  <DetailRow label="NUMERO GUIA" value={task.guideNumber} />
+                  <DetailRow label="AREA ATENCION" value={task.serviceArea} />
+                  <DetailRow
+                    label="BULTOS/ITEMS"
+                    value={
+                      task.packageCount == null
+                        ? undefined
+                        : String(task.packageCount)
+                    }
+                  />
+                  <DetailRow label="FECHA PROGRAMADA" value={task.scheduledDate} />
+                  <DetailRow label="RANGO HORARIO" value={task.timeRange} />
+                  <DetailRow
+                    label="INSTRUCCIONES"
+                    value={task.deliveryInstructions}
+                  />
+                  <DetailRow
+                    label="CONDICION MERCADERIA"
+                    value={task.merchandiseCondition}
+                  />
+                  <DetailRow label="LIQUIDACION" value={task.liquidationStatus} />
+                </>
+              ) : (
+                <>
+                  <DetailRow label="TIPO OPERACION" value="Logistica inversa" />
+                  <DetailRow label="NUMERO_TAREA" value={task.taskNumber ?? task.id} />
+                  <DetailRow label="PROYECTO" value={task.project} />
+                  <DetailRow label="SOT" value={task.sot} />
+                  <DetailRow label="FECHA_PROGRAMADA" value={task.scheduledDate} />
+                  <DetailRow label="RANGO_HORARIO" value={task.timeRange} />
+                  <DetailRow label="TIPO_TAREA" value={task.taskType} />
+                </>
+              )}
               <DetailRow label="CLIENTE" value={task.customerName} />
-              <DetailRow label="DNI_CLIENTE" value={task.customerDocument} />
+              <DetailRow label="DOCUMENTO IDENTIDAD" value={task.customerDocument} />
               <DetailRow label="TELEFONO" value={task.customerPhone} />
+              <DetailRow label="CONTACTO" value={task.contactData} />
               <DetailRow
                 label="UBICACION"
                 value={`${formatValue(task.department)} / ${formatValue(
@@ -1450,8 +1676,101 @@ task?.remoteId ? (
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.modalScrollContent}
       >
-        <Text style={styles.modalTitle}>Nueva gestion</Text>
+        <Text style={styles.modalTitle}>
+          {taskIsLastMile
+            ? `Gestionar ${getLastMileTaskLabel(task).toLowerCase()}`
+            : 'Nueva gestion'}
+        </Text>
 
+        {taskIsLastMile ? (
+          <View style={styles.successDeviceBox}>
+            <SelectorField
+              label="Resultado de gestion"
+              value={selectedLastMileResult?.label ?? ''}
+              onPress={() => setIsLastMileResultModalOpen(true)}
+            />
+
+            <SelectorField
+              label="Subestado"
+              value={lastMileSubstate}
+              onPress={() => setIsLastMileSubstateModalOpen(true)}
+            />
+
+            <SelectorField
+              label="Condicion de mercaderia"
+              value={lastMileMerchandiseCondition}
+              onPress={() => setIsMerchandiseConditionModalOpen(true)}
+            />
+
+            <TextInput
+              value={lastMilePackageCount}
+              onChangeText={setLastMilePackageCount}
+              placeholder="Cantidad bultos/items gestionados"
+              style={styles.input}
+              keyboardType="numeric"
+            />
+
+            {!lastMileIsUnsuccessful ? (
+              <TextInput
+                value={lastMileOperationNumber}
+                onChangeText={setLastMileOperationNumber}
+                placeholder="Numero de operacion opcional"
+                style={styles.input}
+              />
+            ) : null}
+
+            <TextInput
+              value={managementObservation}
+              onChangeText={setManagementObservation}
+              placeholder="Observaciones de la gestion"
+              style={styles.input}
+              multiline
+            />
+
+            <Pressable
+              style={styles.photoButton}
+              onPress={
+                lastMileIsUnsuccessful
+                  ? captureHouseFrontEvidencePhoto
+                  : captureGeneralEvidencePhoto
+              }
+            >
+              <Text style={styles.photoButtonText}>
+                {lastMileIsUnsuccessful
+                  ? houseFrontEvidenceId
+                    ? 'Foto fachada tomada'
+                    : 'Tomar foto fachada'
+                  : generalEvidenceId
+                    ? 'Evidencia tomada'
+                    : 'Tomar evidencia'}
+              </Text>
+            </Pressable>
+
+            {lastMileIsUnsuccessful && houseFrontEvidenceUri ? (
+              <PhotoThumbnail
+                uri={houseFrontEvidenceUri}
+                label="Fachada"
+                onPress={(uri) => setPreviewImageUri(uri)}
+              />
+            ) : null}
+
+            {!lastMileIsUnsuccessful && generalEvidenceUri ? (
+              <PhotoThumbnail
+                uri={generalEvidenceUri}
+                label="Evidencia"
+                onPress={(uri) => setPreviewImageUri(uri)}
+              />
+            ) : null}
+
+            <Text style={styles.helperText}>
+              Para entrega o recojo conforme, registra evidencia del paquete,
+              guia, voucher o fachada segun corresponda. Para no exitosos,
+              evidencia la visita con foto de fachada.
+            </Text>
+          </View>
+        ) : null}
+
+        {!taskIsLastMile ? (
         <View style={styles.statusSelector}>
           <StatusOption
             label="Exitosa"
@@ -1469,8 +1788,9 @@ task?.remoteId ? (
             onPress={() => setSelectedStatus('rescheduled')}
           />
         </View>
+        ) : null}
 
-        {selectedStatus === 'unsuccessful' ? (
+        {!taskIsLastMile && selectedStatus === 'unsuccessful' ? (
           <View style={styles.optionList}>
             <SelectorField
               label="Motivo de no exitosa"
@@ -1480,7 +1800,7 @@ task?.remoteId ? (
           </View>
         ) : null}
 
-        {selectedStatus === 'rescheduled' ? (
+        {!taskIsLastMile && selectedStatus === 'rescheduled' ? (
           <View style={styles.optionList}>
             <SelectorField
               label="Motivo de reprogramacion"
@@ -1502,6 +1822,7 @@ task?.remoteId ? (
           </View>
         ) : null}
 
+        {!taskIsLastMile ? (
         <TextInput
           value={managementObservation}
           onChangeText={setManagementObservation}
@@ -1509,8 +1830,9 @@ task?.remoteId ? (
           style={styles.input}
           multiline
         />
+        ) : null}
 
-        {selectedStatus === 'successful' ? (
+        {!taskIsLastMile && selectedStatus === 'successful' ? (
           <View style={styles.successDeviceBox}>
             <View style={styles.deviceSectionHeader}>
               <Text style={styles.inputLabel}>
@@ -1680,7 +2002,7 @@ task?.remoteId ? (
               gestion.
             </Text>
           </View>
-        ) : (
+        ) : !taskIsLastMile ? (
           <View style={styles.optionList}>
   <Pressable
     style={styles.photoButton}
@@ -1698,8 +2020,8 @@ task?.remoteId ? (
       onPress={(uri) => setPreviewImageUri(uri)}
     />
   ) : null}
-</View>
-        )}
+          </View>
+        ) : null}
 
         <View style={styles.modalActions}>
           <Pressable
@@ -1709,7 +2031,10 @@ task?.remoteId ? (
             <Text style={styles.cancelButtonText}>Cancelar</Text>
           </Pressable>
 
-          <Pressable style={styles.saveButton} onPress={saveManagement}>
+          <Pressable
+            style={styles.saveButton}
+            onPress={taskIsLastMile ? saveLastMileManagement : saveManagement}
+          >
             <Text style={styles.saveButtonText}>Guardar gestion</Text>
           </Pressable>
         </View>
@@ -1785,6 +2110,50 @@ task?.remoteId ? (
         onSelect={(value) => {
           setRescheduleTimeRange(value);
           setIsTimeRangeModalOpen(false);
+        }}
+      />
+
+      <OptionPickerModal
+        visible={isLastMileResultModalOpen}
+        title="Resultado de gestion"
+        options={lastMileResultOptions.map((option) => option.label)}
+        selectedValue={selectedLastMileResult?.label ?? ''}
+        onClose={() => setIsLastMileResultModalOpen(false)}
+        onSelect={(value) => {
+          const selected = lastMileResultOptions.find(
+            (option) => option.label === value
+          );
+
+          if (selected) {
+            setLastMileResultKey(selected.key);
+            setLastMileSubstate(selected.substates[0] ?? '');
+          }
+
+          setIsLastMileResultModalOpen(false);
+        }}
+      />
+
+      <OptionPickerModal
+        visible={isLastMileSubstateModalOpen}
+        title="Subestado"
+        options={[...lastMileSubstateOptions]}
+        selectedValue={lastMileSubstate}
+        onClose={() => setIsLastMileSubstateModalOpen(false)}
+        onSelect={(value) => {
+          setLastMileSubstate(value);
+          setIsLastMileSubstateModalOpen(false);
+        }}
+      />
+
+      <OptionPickerModal
+        visible={isMerchandiseConditionModalOpen}
+        title="Condicion de mercaderia"
+        options={[...MERCHANDISE_CONDITIONS]}
+        selectedValue={lastMileMerchandiseCondition}
+        onClose={() => setIsMerchandiseConditionModalOpen(false)}
+        onSelect={(value) => {
+          setLastMileMerchandiseCondition(value);
+          setIsMerchandiseConditionModalOpen(false);
         }}
       />
       <Modal
@@ -2184,6 +2553,14 @@ receiptButtonText: {
   statusRescheduled: {
     backgroundColor: '#fff3df',
     color: '#9a6200',
+  },
+  liquidationWarning: {
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: '#fff5f5',
+    color: '#9b1c1c',
+    fontSize: 13,
+    fontWeight: '900',
   },
   detailList: {
     gap: 0,

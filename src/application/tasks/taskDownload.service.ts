@@ -62,6 +62,17 @@ function mapRemoteTaskToLocalTask(remoteTask: RemoteTaskDto): Task {
     orderCode: remoteTask.orderCode,
     project: remoteTask.project,
     sot: remoteTask.sot,
+    routeNumber: remoteTask.routeNumber,
+    guideNumber: remoteTask.guideNumber,
+    fieldOperationType: remoteTask.fieldOperationType ?? 'inverse',
+    lastMileTaskType: remoteTask.lastMileTaskType,
+    serviceArea: remoteTask.serviceArea,
+    contactData: remoteTask.contactData,
+    packageCount: remoteTask.packageCount,
+    deliveryInstructions: remoteTask.deliveryInstructions,
+    merchandiseCondition: remoteTask.merchandiseCondition,
+    liquidationStatus: remoteTask.liquidationStatus ?? 'none',
+    hasPendingLiquidation: remoteTask.hasPendingLiquidation ?? false,
 
     assignedUserId: remoteTask.assignedUserId,
 

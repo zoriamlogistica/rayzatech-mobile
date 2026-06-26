@@ -25,6 +25,17 @@ export type Task = {
   orderCode?: string;
   project?: string;
   sot?: string;
+  routeNumber?: string;
+  guideNumber?: string;
+  fieldOperationType?: 'inverse' | 'last_mile';
+  lastMileTaskType?: 'delivery' | 'pickup';
+  serviceArea?: string;
+  contactData?: string;
+  packageCount?: number;
+  deliveryInstructions?: string;
+  merchandiseCondition?: string;
+  liquidationStatus?: 'none' | 'pending' | 'partial' | 'liquidated';
+  hasPendingLiquidation?: boolean;
 
   assignedUserId?: string;
 

@@ -29,6 +29,8 @@ type DashboardState = {
   loadedAt: string;
 };
 
+type OperationFilter = 'inverse' | 'last_mile';
+
 function emptyDashboardState(): DashboardState {
   return {
   totalTasks: 0,
@@ -68,6 +70,7 @@ export default function AgentDashboardScreen() {
     emptyDashboardState()
   );
   const [isLoading, setIsLoading] = useState(false);
+  const [operationFilter, setOperationFilter] = useState<OperationFilter>('inverse');
 
   async function handleError(error: unknown) {
     const fieldError = classifyFieldError(error);
@@ -88,7 +91,9 @@ export default function AgentDashboardScreen() {
     try {
       setIsLoading(true);
 
-      const summary = await getAgentTaskSummary();
+      const summary = await getAgentTaskSummary({
+        fieldOperationType: operationFilter,
+      });
       const syncCounters = await getSyncQueueCounters();
 
       setDashboard({
@@ -106,7 +111,7 @@ unsuccessful: summary.byStatus.unsuccessful,
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [operationFilter]);
 
   useEffect(() => {
     loadDashboard();
@@ -160,6 +165,7 @@ unsuccessful: summary.byStatus.unsuccessful,
   }
 
   const isSynced = dashboard.sync.totalPending === 0;
+  const isLastMile = operationFilter === 'last_mile';
 
   return (
     <AgentScreen
@@ -172,6 +178,19 @@ unsuccessful: summary.byStatus.unsuccessful,
       onSyncPress={syncNow}
       onMenuSynced={loadDashboard}
     >
+      <View style={styles.operationSelector}>
+        <OperationChip
+          label="Logistica inversa"
+          active={operationFilter === 'inverse'}
+          onPress={() => setOperationFilter('inverse')}
+        />
+        <OperationChip
+          label="Ultima milla"
+          active={operationFilter === 'last_mile'}
+          onPress={() => setOperationFilter('last_mile')}
+        />
+      </View>
+
       <View
         style={[
           styles.statusCard,
@@ -211,7 +230,9 @@ unsuccessful: summary.byStatus.unsuccessful,
               <Text style={styles.cardIcon}>📊</Text>
             </View>
 
-            <Text style={styles.cardTitle}>Resumen operativo</Text>
+            <Text style={styles.cardTitle}>
+              {isLastMile ? 'Resumen ultima milla' : 'Resumen operativo'}
+            </Text>
           </View>
 
           <Pressable
@@ -333,7 +354,59 @@ function MiniSync({ label, value }: { label: string; value: number }) {
   );
 }
 
+function OperationChip({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[styles.operationChip, active ? styles.operationChipActive : null]}
+    >
+      <Text
+        style={[
+          styles.operationChipText,
+          active ? styles.operationChipTextActive : null,
+        ]}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
+  operationSelector: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  operationChip: {
+    flex: 1,
+    paddingVertical: 11,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#DDE3EA',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+  },
+  operationChipActive: {
+    borderColor: '#137333',
+    backgroundColor: '#E8F5EE',
+  },
+  operationChipText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#4B5563',
+  },
+  operationChipTextActive: {
+    color: '#137333',
+  },
   statusCard: {
     flexDirection: 'row',
     alignItems: 'center',

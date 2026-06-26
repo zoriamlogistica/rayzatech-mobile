@@ -24,6 +24,7 @@ import {
 } from 'react-native';
 
 type TaskFilter = 'pending' | 'in_progress' | 'completed' | 'all';
+type OperationFilter = 'inverse' | 'last_mile';
 
 type CompletedGroupKey = 'completed' | 'unsuccessful' | 'rescheduled';
 
@@ -46,7 +47,9 @@ export default function AgentTasksScreen() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState<TaskFilter>('pending');
+  const [operationFilter, setOperationFilter] = useState<OperationFilter>('inverse');
   const [searchText, setSearchText] = useState('');
+  const [pendingLiquidationCount, setPendingLiquidationCount] = useState(0);
 
   async function handleError(error: unknown) {
     const fieldError = classifyFieldError(error);
@@ -84,15 +87,28 @@ export default function AgentTasksScreen() {
   }
 
   const loadTasks = useCallback(
-    async (filter: TaskFilter = activeFilter, search: string = searchText) => {
+    async (
+      filter: TaskFilter = activeFilter,
+      search: string = searchText,
+      operation: OperationFilter = operationFilter
+    ) => {
       try {
         setIsLoading(true);
 
         const trimmedSearch = search.trim();
+        const allVisibleTasks = await listCachedTasks({
+          search: trimmedSearch || undefined,
+          fieldOperationType: operation,
+        });
+
+        setPendingLiquidationCount(
+          allVisibleTasks.filter((task) => task.hasPendingLiquidation).length
+        );
 
         if (filter === 'completed') {
           const result = await listCachedTasks({
             search: trimmedSearch || undefined,
+            fieldOperationType: operation,
           });
 
           setCompletedGroups(buildCompletedGroups(result));
@@ -104,6 +120,7 @@ export default function AgentTasksScreen() {
         const result = await listCachedTasks({
           status: filter === 'all' ? undefined : filter,
           search: trimmedSearch || undefined,
+          fieldOperationType: operation,
         });
 
         setTasks(result);
@@ -115,7 +132,7 @@ export default function AgentTasksScreen() {
         setIsLoading(false);
       }
     },
-    [activeFilter, searchText]
+    [activeFilter, operationFilter, searchText]
   );
 
   useEffect(() => {
@@ -125,7 +142,7 @@ export default function AgentTasksScreen() {
 useFocusEffect(
   useCallback(() => {
     loadTasks(activeFilter, searchText);
-  }, [loadTasks, activeFilter, searchText])
+  }, [loadTasks, activeFilter, operationFilter, searchText])
 );
 
   async function syncNow() {
@@ -139,7 +156,7 @@ useFocusEffect(
         forceFail: false,
       });
 
-      await loadTasks(activeFilter, searchText);
+      await loadTasks(activeFilter, searchText, operationFilter);
 
       Alert.alert(
         'Sincronización finalizada',
@@ -266,7 +283,12 @@ async function openMap(task: TaskListItem) {
 
   function applySearch(text: string) {
     setSearchText(text);
-    loadTasks(activeFilter, text);
+    loadTasks(activeFilter, text, operationFilter);
+  }
+
+  function changeOperationFilter(nextOperation: OperationFilter) {
+    setOperationFilter(nextOperation);
+    loadTasks(activeFilter, searchText, nextOperation);
   }
 
   function toggleGroup(groupKey: CompletedGroupKey) {
@@ -285,12 +307,12 @@ async function openMap(task: TaskListItem) {
     <AgentScreen
       active="tasks"
       title="Mis tareas"
-      subtitle="Pendientes, en progreso y gestionadas"
+      subtitle="Tareas pendientes por ruta"
       isRefreshing={isLoading}
-      onRefresh={() => loadTasks(activeFilter, searchText)}
+      onRefresh={() => loadTasks(activeFilter, searchText, operationFilter)}
       isSyncing={isLoading}
       onSyncPress={syncNow}
-      onMenuSynced={() => loadTasks(activeFilter, searchText)}
+      onMenuSynced={() => loadTasks(activeFilter, searchText, operationFilter)}
     >
       <TextInput
         value={searchText}
@@ -300,28 +322,45 @@ async function openMap(task: TaskListItem) {
         autoCapitalize="none"
       />
 
+      <View style={styles.operationSelector}>
+        <OperationChip
+          label="Logistica inversa"
+          active={operationFilter === 'inverse'}
+          onPress={() => changeOperationFilter('inverse')}
+        />
+        <OperationChip
+          label="Ultima milla"
+          active={operationFilter === 'last_mile'}
+          onPress={() => changeOperationFilter('last_mile')}
+        />
+      </View>
+
       <View style={styles.filterContainer}>
         <FilterChip
           label="Pendientes"
           active={activeFilter === 'pending'}
-          onPress={() => loadTasks('pending', searchText)}
+          onPress={() => loadTasks('pending', searchText, operationFilter)}
         />
         <FilterChip
           label="En progreso"
           active={activeFilter === 'in_progress'}
-          onPress={() => loadTasks('in_progress', searchText)}
-        />
-        <FilterChip
-          label="Completadas"
-          active={activeFilter === 'completed'}
-          onPress={() => loadTasks('completed', searchText)}
-        />
-        <FilterChip
-          label="Todas"
-          active={activeFilter === 'all'}
-          onPress={() => loadTasks('all', searchText)}
+          onPress={() => loadTasks('in_progress', searchText, operationFilter)}
         />
       </View>
+
+      {pendingLiquidationCount > 0 ? (
+        <Pressable
+          style={styles.liquidationAlert}
+          onPress={() => router.push('/agent-managed-tasks' as unknown as Href)}
+        >
+          <Text style={styles.liquidationAlertTitle}>
+            Tienes mercaderia pendiente de liquidar
+          </Text>
+          <Text style={styles.liquidationAlertText}>
+            {pendingLiquidationCount} pedido(s) requieren cierre en almacen.
+          </Text>
+        </Pressable>
+      ) : null}
 
       <View style={styles.summaryBox}>
         <Text style={styles.summaryText}>
@@ -471,6 +510,32 @@ function FilterChip({
   );
 }
 
+function OperationChip({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[styles.operationChip, active ? styles.operationChipActive : null]}
+    >
+      <Text
+        style={[
+          styles.operationChipText,
+          active ? styles.operationChipTextActive : null,
+        ]}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 function TaskCard({
   task,
   getStatusLabel,
@@ -512,6 +577,22 @@ function TaskCard({
         Proyecto/Tipo: {task.project ?? '-'} / {task.taskType ?? '-'}
       </Text>
 
+      <View style={styles.infoRow}>
+        {task.routeNumber ? (
+          <Text style={styles.infoPill}>Ruta: {task.routeNumber}</Text>
+        ) : null}
+
+        {task.lastMileTaskType ? (
+          <Text style={styles.infoPill}>
+            {task.lastMileTaskType === 'delivery' ? 'Entrega' : 'Recojo'}
+          </Text>
+        ) : null}
+
+        {task.packageCount ? (
+          <Text style={styles.infoPill}>{task.packageCount} bultos/items</Text>
+        ) : null}
+      </View>
+
       <Text style={styles.taskMeta} numberOfLines={1}>
   Teléfono: {task.customerPhone ?? '-'}
 </Text>
@@ -543,6 +624,12 @@ function TaskCard({
       {task.isLocked ? (
         <Text style={styles.dangerText}>
           Bloqueada: {task.lockReason ?? 'Sin motivo registrado'}
+        </Text>
+      ) : null}
+
+      {task.hasPendingLiquidation ? (
+        <Text style={styles.dangerText}>
+          Pedido con items pendiente de liquidar
         </Text>
       ) : null}
 
@@ -580,6 +667,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     backgroundColor: '#fff',
   },
+  operationSelector: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  operationChip: {
+    flex: 1,
+    paddingVertical: 11,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#DDE3EA',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+  },
+  operationChipActive: {
+    borderColor: '#137333',
+    backgroundColor: '#E8F5EE',
+  },
+  operationChipText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#4B5563',
+  },
+  operationChipTextActive: {
+    color: '#137333',
+  },
   filterContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -610,6 +723,23 @@ const styles = StyleSheet.create({
   summaryText: {
     fontSize: 13,
     opacity: 0.75,
+  },
+  liquidationAlert: {
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#f3b5b5',
+    borderRadius: 12,
+    backgroundColor: '#fff5f5',
+    gap: 3,
+  },
+  liquidationAlertTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#9b1c1c',
+  },
+  liquidationAlertText: {
+    fontSize: 12,
+    color: '#9b1c1c',
   },
   listContainer: {
     gap: 12,

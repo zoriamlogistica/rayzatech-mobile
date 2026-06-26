@@ -54,6 +54,17 @@ export const migrations: Migration[] = [
         order_code TEXT,
         project TEXT,
         sot TEXT,
+        route_number TEXT,
+        guide_number TEXT,
+        field_operation_type TEXT DEFAULT 'inverse',
+        last_mile_task_type TEXT,
+        service_area TEXT,
+        contact_data TEXT,
+        package_count INTEGER,
+        delivery_instructions TEXT,
+        merchandise_condition TEXT,
+        liquidation_status TEXT DEFAULT 'none',
+        has_pending_liquidation INTEGER DEFAULT 0,
 
         assigned_user_id TEXT,
 
@@ -439,7 +450,7 @@ export const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_recovered_devices_management_id ON recovered_devices(management_id);
     `,
   },
-    {
+  {
     version: 7,
     name: 'user_profile_contact_fields',
     sql: `
@@ -450,6 +461,23 @@ export const migrations: Migration[] = [
       ALTER TABLE users ADD COLUMN department TEXT;
       ALTER TABLE users ADD COLUMN province TEXT;
       ALTER TABLE users ADD COLUMN district TEXT;
+    `,
+  },
+  {
+    version: 8,
+    name: 'last_mile_task_fields',
+    sql: `
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS route_number TEXT;
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS guide_number TEXT;
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS field_operation_type TEXT DEFAULT 'inverse';
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS last_mile_task_type TEXT;
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS service_area TEXT;
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS contact_data TEXT;
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS package_count INTEGER;
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS delivery_instructions TEXT;
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS merchandise_condition TEXT;
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS liquidation_status TEXT DEFAULT 'none';
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS has_pending_liquidation INTEGER DEFAULT 0;
     `,
   },
 ];

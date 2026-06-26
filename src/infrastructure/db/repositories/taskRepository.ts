@@ -11,6 +11,17 @@ type TaskRow = {
   order_code: string | null;
   project: string | null;
   sot: string | null;
+  route_number: string | null;
+  guide_number: string | null;
+  field_operation_type: Task['fieldOperationType'] | null;
+  last_mile_task_type: Task['lastMileTaskType'] | null;
+  service_area: string | null;
+  contact_data: string | null;
+  package_count: number | null;
+  delivery_instructions: string | null;
+  merchandise_condition: string | null;
+  liquidation_status: Task['liquidationStatus'] | null;
+  has_pending_liquidation: number | null;
 
   assigned_user_id: string | null;
 
@@ -66,6 +77,17 @@ function mapRowToTask(row: TaskRow): Task {
     orderCode: row.order_code ?? undefined,
     project: row.project ?? undefined,
     sot: row.sot ?? undefined,
+    routeNumber: row.route_number ?? undefined,
+    guideNumber: row.guide_number ?? undefined,
+    fieldOperationType: row.field_operation_type ?? undefined,
+    lastMileTaskType: row.last_mile_task_type ?? undefined,
+    serviceArea: row.service_area ?? undefined,
+    contactData: row.contact_data ?? undefined,
+    packageCount: row.package_count ?? undefined,
+    deliveryInstructions: row.delivery_instructions ?? undefined,
+    merchandiseCondition: row.merchandise_condition ?? undefined,
+    liquidationStatus: row.liquidation_status ?? undefined,
+    hasPendingLiquidation: row.has_pending_liquidation === 1,
 
     assignedUserId: row.assigned_user_id ?? undefined,
 
@@ -129,6 +151,17 @@ export async function upsertTask(task: Task): Promise<void> {
         order_code,
         project,
         sot,
+        route_number,
+        guide_number,
+        field_operation_type,
+        last_mile_task_type,
+        service_area,
+        contact_data,
+        package_count,
+        delivery_instructions,
+        merchandise_condition,
+        liquidation_status,
+        has_pending_liquidation,
         assigned_user_id,
         customer_name,
         customer_document,
@@ -167,7 +200,8 @@ export async function upsertTask(task: Task): Promise<void> {
         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?, ?, ?
       )
       ON CONFLICT(id) DO UPDATE SET
         remote_id = excluded.remote_id,
@@ -175,6 +209,17 @@ export async function upsertTask(task: Task): Promise<void> {
         order_code = excluded.order_code,
         project = excluded.project,
         sot = excluded.sot,
+        route_number = excluded.route_number,
+        guide_number = excluded.guide_number,
+        field_operation_type = excluded.field_operation_type,
+        last_mile_task_type = excluded.last_mile_task_type,
+        service_area = excluded.service_area,
+        contact_data = excluded.contact_data,
+        package_count = excluded.package_count,
+        delivery_instructions = excluded.delivery_instructions,
+        merchandise_condition = excluded.merchandise_condition,
+        liquidation_status = excluded.liquidation_status,
+        has_pending_liquidation = excluded.has_pending_liquidation,
         assigned_user_id = excluded.assigned_user_id,
         customer_name = excluded.customer_name,
         customer_document = excluded.customer_document,
@@ -215,6 +260,17 @@ export async function upsertTask(task: Task): Promise<void> {
       task.orderCode ?? null,
       task.project ?? null,
       task.sot ?? null,
+      task.routeNumber ?? null,
+      task.guideNumber ?? null,
+      task.fieldOperationType ?? 'inverse',
+      task.lastMileTaskType ?? null,
+      task.serviceArea ?? null,
+      task.contactData ?? null,
+      task.packageCount ?? null,
+      task.deliveryInstructions ?? null,
+      task.merchandiseCondition ?? null,
+      task.liquidationStatus ?? 'none',
+      task.hasPendingLiquidation ? 1 : 0,
       task.assignedUserId ?? null,
       task.customerName ?? null,
       task.customerDocument ?? null,
@@ -487,6 +543,17 @@ export async function updateTaskRemoteMasterData(task: Task): Promise<void> {
         order_code = ?,
         project = ?,
         sot = ?,
+        route_number = ?,
+        guide_number = ?,
+        field_operation_type = ?,
+        last_mile_task_type = ?,
+        service_area = ?,
+        contact_data = ?,
+        package_count = ?,
+        delivery_instructions = ?,
+        merchandise_condition = ?,
+        liquidation_status = ?,
+        has_pending_liquidation = ?,
         assigned_user_id = ?,
         customer_name = ?,
         customer_document = ?,
@@ -521,6 +588,17 @@ export async function updateTaskRemoteMasterData(task: Task): Promise<void> {
       task.orderCode ?? null,
       task.project ?? null,
       task.sot ?? null,
+      task.routeNumber ?? null,
+      task.guideNumber ?? null,
+      task.fieldOperationType ?? 'inverse',
+      task.lastMileTaskType ?? null,
+      task.serviceArea ?? null,
+      task.contactData ?? null,
+      task.packageCount ?? null,
+      task.deliveryInstructions ?? null,
+      task.merchandiseCondition ?? null,
+      task.liquidationStatus ?? 'none',
+      task.hasPendingLiquidation ? 1 : 0,
       task.assignedUserId ?? null,
       task.customerName ?? null,
       task.customerDocument ?? null,
