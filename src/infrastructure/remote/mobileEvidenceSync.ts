@@ -9,6 +9,7 @@ import { getTaskById } from '@/infrastructure/db/repositories/taskRepository';
 import {
   getTaskManagementByGeneralEvidenceId,
   getTaskManagementById,
+  listTaskManagementsByTask,
 } from '@/infrastructure/db/repositories/taskManagementRepository';
 import { mobileApiUploadFile } from './mobileApiClient';
 import { syncTaskManagementToRemote } from './mobileTaskManagementSync';
@@ -65,6 +66,11 @@ export async function syncEvidenceToRemote(
 
       management = await getTaskManagementById(recoveredDevice.managementId);
     }
+  }
+
+  if (!management && task.fieldOperationType === 'last_mile') {
+    const managements = await listTaskManagementsByTask(evidence.taskId);
+    management = managements[0] ?? null;
   }
 
   if (!management) {

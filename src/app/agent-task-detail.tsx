@@ -31,6 +31,7 @@ import {
 import {
   getTaskDetailSnapshot,
   type TaskDetailSnapshot,
+  type TaskManagementHistoryItem,
 } from '@/application/tasks/taskQuery.service';
 import { AgentScreen } from '@/components/agent-screen';
 import type { RecoveredDeviceType } from '@/domain/tasks/recoveredDevice.types';
@@ -211,6 +212,53 @@ function formatValue(value?: string | number | null): string {
   }
 
   return String(value);
+}
+
+function getObservationValue(
+  observation: string | undefined,
+  label: string
+): string | null {
+  if (!observation) {
+    return null;
+  }
+
+  const prefix = `${label}:`;
+  const line = observation
+    .split('\n')
+    .find((item) => item.trim().toLowerCase().startsWith(prefix.toLowerCase()));
+
+  if (!line) {
+    return null;
+  }
+
+  const value = line.slice(prefix.length).trim();
+  return value || null;
+}
+
+function getManagementEvidencePhotos(
+  item: TaskManagementHistoryItem,
+  evidences: TaskDetailSnapshot['evidences']
+) {
+  const managedAt = new Date(item.management.managedAt).getTime();
+  const timeWindowMs = 30 * 60 * 1000;
+  const photos = evidences.filter((evidence) => {
+    const capturedAt = new Date(evidence.capturedAt).getTime();
+
+    if (!Number.isFinite(managedAt) || !Number.isFinite(capturedAt)) {
+      return false;
+    }
+
+    return Math.abs(managedAt - capturedAt) <= timeWindowMs;
+  });
+
+  if (
+    item.generalEvidence &&
+    !photos.some((photo) => photo.id === item.generalEvidence?.id)
+  ) {
+    photos.unshift(item.generalEvidence);
+  }
+
+  return photos;
 }
 
 function formatLocationForDetail(params: {
@@ -1269,31 +1317,6 @@ async function messageCustomer() {
   await Linking.openURL(`https://wa.me/${whatsappPhone}`);
 }
 
-async function buildReceiptUrl(
-  remoteTaskId?: string,
-  remoteManagementId?: string
-) {
-  if (!remoteTaskId || !remoteManagementId) {
-    return null;
-  }
-
-  const baseUrl = process.env.EXPO_PUBLIC_MOBILE_API_BASE_URL;
-
-  if (!baseUrl) {
-    return null;
-  }
-
-  const accessToken = await getSecureAccessToken();
-
-  if (!accessToken) {
-    return null;
-  }
-
-  const safeBaseUrl = baseUrl.replace(/\/$/, '');
-  const safeToken = encodeURIComponent(accessToken);
-
-  return `${safeBaseUrl}/api/mobile/tasks/${remoteTaskId}/receipt/${remoteManagementId}?access_token=${safeToken}`;
-}
 async function getPublicReceiptUrl(remoteManagementId?: string) {
   if (!task?.remoteId || !remoteManagementId) {
     return null;
@@ -1705,7 +1728,33 @@ async function openCustomerMap() {
                 </Text>
               </View>
             ) : (
-              snapshot.managementHistory.map((item) => (
+              snapshot.managementHistory.map((item) => {
+                const historyPhotos = getManagementEvidencePhotos(
+                  item,
+                  snapshot.evidences
+                );
+                const lastMileResult = getObservationValue(
+                  item.management.observation,
+                  'Resultado ultima milla'
+                );
+                const lastMileSubstatus = getObservationValue(
+                  item.management.observation,
+                  'Subestado'
+                );
+                const lastMileCondition = getObservationValue(
+                  item.management.observation,
+                  'Condicion mercaderia'
+                );
+                const lastMileQuantity = getObservationValue(
+                  item.management.observation,
+                  'Cantidad bultos/items gestionados'
+                );
+                const lastMileAgentNotes = getObservationValue(
+                  item.management.observation,
+                  'Observaciones agente'
+                );
+
+                return (
                 <View key={item.management.id} style={styles.managementCard}>
                   <View style={styles.managementHeader}>
                     <Text style={styles.managementTitle}>
@@ -1741,7 +1790,35 @@ async function openCustomerMap() {
   })}
 </Text>
 
-                  {item.management.reason ? (
+                  {taskIsLastMile ? (
+                    <>
+                      <Text style={styles.metaText}>
+                        Resultado de la gestion:{' '}
+                        {formatValue(
+                          lastMileResult ||
+                            getManagementStatusLabel(item.management.resultStatus)
+                        )}
+                      </Text>
+                      <Text style={styles.metaText}>
+                        Subestado:{' '}
+                        {formatValue(lastMileSubstatus || item.management.reason)}
+                      </Text>
+                      {lastMileCondition ? (
+                        <Text style={styles.metaText}>
+                          Condicion de mercaderia:{' '}
+                          {formatValue(lastMileCondition)}
+                        </Text>
+                      ) : null}
+                      <Text style={styles.metaText}>
+                        Cantidad bultos/items:{' '}
+                        {formatValue(lastMileQuantity)}
+                      </Text>
+                      <Text style={styles.metaText}>
+                        Observaciones del agente:{' '}
+                        {formatValue(lastMileAgentNotes)}
+                      </Text>
+                    </>
+                  ) : item.management.reason ? (
                     <Text style={styles.metaText}>
                       Motivo: {item.management.reason}
                     </Text>
@@ -1761,9 +1838,11 @@ async function openCustomerMap() {
                     </Text>
                   ) : null}
 
-                  <Text style={styles.metaText}>
-                    Observaciones: {formatValue(item.management.observation)}
-                  </Text>
+                  {!taskIsLastMile ? (
+                    <Text style={styles.metaText}>
+                      Observaciones: {formatValue(item.management.observation)}
+                    </Text>
+                  ) : null}
 
                   <Text style={styles.metaText}>
                     Coordenadas:{' '}
@@ -1778,27 +1857,32 @@ async function openCustomerMap() {
                     </Text>
                   ) : null}
 
-                  {item.generalEvidence ? (
+                  {historyPhotos.length > 0 ? (
   <View style={styles.evidenceBox}>
     <Text style={styles.evidenceText}>Evidencia registrada</Text>
 
     <View style={styles.evidencePreviewRow}>
-      <PhotoThumbnail
-        uri={item.generalEvidence.localUri}
-        label="Evidencia"
-        onPress={(uri) => setPreviewImageUri(uri)}
-      />
+      {historyPhotos.map((photo, index) => (
+        <View key={photo.id} style={styles.deviceThumbnailBox}>
+          <PhotoThumbnail
+            uri={photo.localUri}
+            label={`Foto ${index + 1}`}
+            onPress={(uri) => setPreviewImageUri(uri)}
+          />
 
-      <Text style={styles.evidenceSizeText}>
-        Peso: {formatFileSize(item.generalEvidence.sizeBytes)}
-      </Text>
+          <Text style={styles.deviceEvidenceSizeText}>
+            {formatFileSize(photo.sizeBytes)}
+          </Text>
+        </View>
+      ))}
     </View>
   </View>
 ) : null}
 
 {item.management.resultStatus === 'successful' &&
 item.management.remoteId &&
-task?.remoteId ? (
+task?.remoteId &&
+!taskIsLastMile ? (
   <Pressable
   style={styles.receiptButton}
   onPress={() => showReceiptOptions(item.management.remoteId)}
@@ -1809,7 +1893,7 @@ task?.remoteId ? (
 </Pressable>
 ) : null}
                   
-                  {item.management.resultStatus === 'successful' ? (
+                  {!taskIsLastMile && item.management.resultStatus === 'successful' ? (
                     <View style={styles.devicesSection}>
                       <Text style={styles.devicesTitle}>
                         Equipos recuperados ({item.recoveredDevices.length})
@@ -1863,7 +1947,8 @@ task?.remoteId ? (
                     </View>
                   ) : null}
                 </View>
-              ))
+                );
+              })
             )}
           </View>
 

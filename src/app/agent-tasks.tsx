@@ -30,21 +30,7 @@ import {
   View,
 } from 'react-native';
 
-type TaskFilter =
-  | 'pending'
-  | 'in_progress'
-  | 'completed'
-  | 'unsuccessful'
-  | 'partials'
-  | 'all';
-
-type CompletedGroupKey = 'completed' | 'unsuccessful' | 'rescheduled';
-
-type CompletedGroup = {
-  key: CompletedGroupKey;
-  title: string;
-  tasks: TaskListItem[];
-};
+type TaskFilter = 'all' | 'pending' | 'completed' | 'unsuccessful';
 
 type RouteGroup = {
   routeNumber: string;
@@ -53,27 +39,23 @@ type RouteGroup = {
 
 export default function AgentTasksScreen() {
   const params = useLocalSearchParams<{ filter?: string }>();
-  const [tasks, setTasks] = useState<TaskListItem[]>([]);
-  const [completedGroups] = useState<CompletedGroup[]>([]);
-  const [expandedGroups, setExpandedGroups] = useState<
-    Record<CompletedGroupKey, boolean>
-  >({
-    completed: true,
-    unsuccessful: false,
-    rescheduled: false,
-  });
-  const [isLoading, setIsLoading] = useState(false);
-  const initialFilter =
-    params.filter === 'unsuccessful' ||
-    params.filter === 'partials' ||
+  const initialFilter: TaskFilter =
+    params.filter === 'all' ||
     params.filter === 'completed' ||
-    params.filter === 'all'
-      ? (params.filter as TaskFilter)
+    params.filter === 'unsuccessful'
+      ? params.filter
       : 'pending';
-  const [activeFilter, setActiveFilter] = useState<TaskFilter>(initialFilter);
   const selectedOperation = getSelectedFieldOperation() ?? 'inverse';
+
+  const [tasks, setTasks] = useState<TaskListItem[]>([]);
+  const [partialTaskIds, setPartialTaskIds] = useState<Set<string>>(new Set());
+  const [expandedRoutes, setExpandedRoutes] = useState<Record<string, boolean>>(
+    {}
+  );
+  const [activeFilter, setActiveFilter] = useState<TaskFilter>(initialFilter);
   const [searchText, setSearchText] = useState('');
   const [pendingLiquidationCount, setPendingLiquidationCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
 
   async function handleError(error: unknown) {
     const fieldError = classifyFieldError(error);
@@ -82,19 +64,17 @@ export default function AgentTasksScreen() {
       scope: 'AGENT_TASKS',
       message: fieldError.message,
       error,
-      payload: {
-        fieldError,
-      },
+      payload: { fieldError },
     });
 
     Alert.alert(fieldError.title, fieldError.message);
   }
 
-  async function filterPartialTasks(
-    allTasks: TaskListItem[]
-  ): Promise<TaskListItem[]> {
+  async function getPartialTaskIds(
+    visibleTasks: TaskListItem[]
+  ): Promise<Set<string>> {
     const checks = await Promise.all(
-      allTasks.map(async (task) => {
+      visibleTasks.map(async (task) => {
         const managements = await listTaskManagementsByTask(task.id);
         const latestManagement = managements[0];
         const partialText = [
@@ -105,22 +85,19 @@ export default function AgentTasksScreen() {
           .join(' ')
           .toLowerCase();
 
-        return partialText.includes('parcial') ? task : null;
+        return partialText.includes('parcial') ? task.id : null;
       })
     );
 
-    return checks.filter((task): task is TaskListItem => task !== null);
+    return new Set(checks.filter((taskId): taskId is string => taskId !== null));
   }
 
-  function buildRouteGroups(allTasks: TaskListItem[]): RouteGroup[] {
+  function buildRouteGroups(visibleTasks: TaskListItem[]): RouteGroup[] {
     const groups = new Map<string, TaskListItem[]>();
 
-    for (const task of allTasks) {
+    for (const task of visibleTasks) {
       const routeNumber = task.routeNumber?.trim() || 'Sin ruta';
-      const routeTasks = groups.get(routeNumber) ?? [];
-
-      routeTasks.push(task);
-      groups.set(routeNumber, routeTasks);
+      groups.set(routeNumber, [...(groups.get(routeNumber) ?? []), task]);
     }
 
     return [...groups.entries()].map(([routeNumber, routeTasks]) => ({
@@ -148,18 +125,14 @@ export default function AgentTasksScreen() {
           allVisibleTasks.filter((task) => task.hasPendingLiquidation).length
         );
 
-        const baseResult = await listCachedTasks({
-          status:
-            filter === 'all' || filter === 'partials' ? undefined : filter,
+        const result = await listCachedTasks({
+          status: filter === 'all' ? undefined : filter,
           search: trimmedSearch || undefined,
           fieldOperationType: operation,
         });
-        const result =
-          filter === 'partials'
-            ? await filterPartialTasks(baseResult)
-            : baseResult;
 
         setTasks(result);
+        setPartialTaskIds(await getPartialTaskIds(result));
         setActiveFilter(filter);
       } catch (error) {
         await handleError(error);
@@ -167,25 +140,24 @@ export default function AgentTasksScreen() {
         setIsLoading(false);
       }
     },
-    [activeFilter, selectedOperation, searchText]
+    [activeFilter, searchText, selectedOperation]
   );
 
   useEffect(() => {
-  loadTasks('pending', '');
-}, [loadTasks]);
+    loadTasks(initialFilter, '');
+  }, [loadTasks, initialFilter]);
 
-useFocusEffect(
-  useCallback(() => {
-    loadTasks(activeFilter, searchText);
-  }, [loadTasks, activeFilter, searchText])
-);
+  useFocusEffect(
+    useCallback(() => {
+      loadTasks(activeFilter, searchText);
+    }, [loadTasks, activeFilter, searchText])
+  );
 
   async function syncNow() {
     try {
       setIsLoading(true);
 
       const downloadResult = await downloadDevTasksToLocalCache();
-
       const syncResult = await runDevSyncSimulation({
         limit: 100,
         forceFail: false,
@@ -194,7 +166,7 @@ useFocusEffect(
       await loadTasks(activeFilter, searchText, selectedOperation);
 
       Alert.alert(
-        'Sincronización finalizada',
+        'Sincronizacion finalizada',
         `Tareas recibidas: ${downloadResult.remoteTasksReceived}.\n` +
           `Insertadas: ${downloadResult.inserted}.\n` +
           `Actualizadas: ${downloadResult.updated}.\n` +
@@ -208,50 +180,6 @@ useFocusEffect(
     }
   }
 
-  function getStatusLabel(status: TaskListItem['status']): string {
-    if (status === 'pending') {
-      return 'Pendiente';
-    }
-
-    if (status === 'in_progress') {
-      return 'En progreso';
-    }
-
-    if (status === 'completed') {
-      return 'Completada';
-    }
-
-    if (status === 'unsuccessful') {
-      return 'No exitosa';
-    }
-
-    if (status === 'rescheduled') {
-      return 'Reprogramada';
-    }
-
-    if (status === 'cancelled') {
-      return 'Cancelada';
-    }
-
-    return status;
-  }
-
-  function getPriorityLabel(priority?: TaskListItem['priority']): string {
-    if (priority === 'urgent') {
-      return 'Urgente';
-    }
-
-    if (priority === 'high') {
-      return 'Alta';
-    }
-
-    if (priority === 'low') {
-      return 'Baja';
-    }
-
-    return 'Normal';
-  }
-
   function openTask(taskId: string) {
     router.push(`/agent-task-detail?taskId=${encodeURIComponent(taskId)}` as Href);
   }
@@ -260,7 +188,7 @@ useFocusEffect(
     const cleanPhone = phone?.trim();
 
     if (!cleanPhone) {
-      Alert.alert('Sin teléfono', 'Esta tarea no tiene teléfono registrado.');
+      Alert.alert('Sin telefono', 'Esta tarea no tiene telefono registrado.');
       return;
     }
 
@@ -271,7 +199,7 @@ useFocusEffect(
     const cleanPhone = phone?.replace(/\D/g, '');
 
     if (!cleanPhone) {
-      Alert.alert('Sin teléfono', 'Esta tarea no tiene teléfono registrado.');
+      Alert.alert('Sin telefono', 'Esta tarea no tiene telefono registrado.');
       return;
     }
 
@@ -281,50 +209,38 @@ useFocusEffect(
     await Linking.openURL(`https://wa.me/${whatsappPhone}`);
   }
 
-  function hasValidCoordinates(
-  latitude?: string | number | null,
-  longitude?: string | number | null
-): boolean {
-  const lat = Number(latitude);
-  const lng = Number(longitude);
+  async function openMap(task: TaskListItem) {
+    const lat = Number(task.latitude);
+    const lng = Number(task.longitude);
+    const query =
+      Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0
+        ? `${lat},${lng}`
+        : [task.address, task.district, 'Peru'].filter(Boolean).join(', ');
 
-  return (
-    Number.isFinite(lat) &&
-    Number.isFinite(lng) &&
-    lat !== 0 &&
-    lng !== 0
-  );
-}
+    if (!query.trim()) {
+      Alert.alert(
+        'Sin ubicacion',
+        'Esta tarea no tiene direccion ni coordenadas registradas.'
+      );
+      return;
+    }
 
-async function openMap(task: TaskListItem) {
-  const query = hasValidCoordinates(task.latitude, task.longitude)
-    ? `${task.latitude},${task.longitude}`
-    : [task.address, task.district, 'Perú'].filter(Boolean).join(', ');
-
-  if (!query.trim()) {
-    Alert.alert(
-      'Sin ubicación',
-      'Esta tarea no tiene dirección ni coordenadas registradas.'
+    await Linking.openURL(
+      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+        query
+      )}`
     );
-    return;
   }
-
-  const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-    query
-  )}`;
-
-  await Linking.openURL(url);
-}
 
   function applySearch(text: string) {
     setSearchText(text);
     loadTasks(activeFilter, text, selectedOperation);
   }
 
-  function toggleGroup(groupKey: CompletedGroupKey) {
-    setExpandedGroups((current) => ({
+  function toggleRoute(routeNumber: string, defaultExpanded: boolean) {
+    setExpandedRoutes((current) => ({
       ...current,
-      [groupKey]: !current[groupKey],
+      [routeNumber]: !(current[routeNumber] ?? defaultExpanded),
     }));
   }
 
@@ -334,7 +250,7 @@ async function openMap(task: TaskListItem) {
     <AgentScreen
       active="tasks"
       title="Mis tareas"
-      subtitle="Tareas pendientes por ruta"
+      subtitle="Tareas por ruta"
       isRefreshing={isLoading}
       onRefresh={() => loadTasks(activeFilter, searchText, selectedOperation)}
       isSyncing={isLoading}
@@ -344,38 +260,38 @@ async function openMap(task: TaskListItem) {
       <TextInput
         value={searchText}
         onChangeText={applySearch}
-        placeholder="Buscar por tarea, cliente, distrito, dirección..."
+        placeholder="Buscar por tarea, cliente, distrito, direccion..."
         style={styles.searchInput}
         autoCapitalize="none"
       />
 
       <View style={styles.filterContainer}>
         <FilterChip
+          label="Todas"
+          active={activeFilter === 'all'}
+          onPress={() => loadTasks('all', searchText, selectedOperation)}
+        />
+        <FilterChip
           label="Pendientes"
           active={activeFilter === 'pending'}
           onPress={() => loadTasks('pending', searchText, selectedOperation)}
         />
         <FilterChip
-          label="En progreso"
-          active={activeFilter === 'in_progress'}
-          onPress={() => loadTasks('in_progress', searchText, selectedOperation)}
+          label="Exitosas"
+          active={activeFilter === 'completed'}
+          onPress={() => loadTasks('completed', searchText, selectedOperation)}
         />
         <FilterChip
           label="No exitosas"
           active={activeFilter === 'unsuccessful'}
           onPress={() => loadTasks('unsuccessful', searchText, selectedOperation)}
         />
-        <FilterChip
-          label="Parciales"
-          active={activeFilter === 'partials'}
-          onPress={() => loadTasks('partials', searchText, selectedOperation)}
-        />
       </View>
 
       {pendingLiquidationCount > 0 ? (
         <Pressable
           style={styles.liquidationAlert}
-          onPress={() => router.push('/agent-managed-tasks' as unknown as Href)}
+          onPress={() => router.push('/agent-managed-tasks' as Href)}
         >
           <Text style={styles.liquidationAlertTitle}>
             Tienes mercaderia pendiente de liquidar
@@ -388,144 +304,97 @@ async function openMap(task: TaskListItem) {
 
       <View style={styles.summaryBox}>
         <Text style={styles.summaryText}>
-          Filtro: {getFilterLabel(activeFilter)} | Total mostrado:{' '}
-          {tasks.length}
+          Filtro: {getFilterLabel(activeFilter)} | Total mostrado: {tasks.length}
         </Text>
       </View>
 
-      {activeFilter === 'completed' && completedGroups.length > 0 ? (
-        <View style={styles.groupList}>
-          {completedGroups.map((group) => {
-            const isExpanded = expandedGroups[group.key];
+      <View style={styles.listContainer}>
+        {tasks.length === 0 ? (
+          <View style={styles.emptyBox}>
+            <Text style={styles.emptyTitle}>No hay tareas para mostrar</Text>
+            <Text style={styles.emptyText}>
+              Sin tareas con el filtro o busqueda actual.
+            </Text>
+          </View>
+        ) : (
+          routeGroups.map((group) => {
+            const defaultExpanded = routeGroups.length === 1;
+            const isExpanded =
+              expandedRoutes[group.routeNumber] ?? defaultExpanded;
 
             return (
-              <View key={group.key} style={styles.groupCard}>
+              <View key={group.routeNumber} style={styles.routeGroupCard}>
                 <Pressable
-                  onPress={() => toggleGroup(group.key)}
-                  style={styles.groupHeader}
+                  style={styles.routeGroupHeader}
+                  onPress={() => toggleRoute(group.routeNumber, defaultExpanded)}
                 >
-                  <View style={styles.groupTitleWrap}>
+                  <View style={styles.routeGroupTitleWrap}>
                     <Text style={styles.groupChevron}>
                       {isExpanded ? '▼' : '▶'}
                     </Text>
-                    <Text style={styles.groupTitle}>{group.title}</Text>
+                    <Text style={styles.routeGroupTitle}>
+                      Ruta {group.routeNumber}
+                    </Text>
                   </View>
-
-                  <Text style={styles.groupCount}>{group.tasks.length}</Text>
+                  <Text style={styles.routeGroupCount}>
+                    {group.tasks.length}
+                  </Text>
                 </Pressable>
 
-                {isExpanded ? (
-                  group.tasks.length === 0 ? (
-                    <View style={styles.emptyBox}>
-                      <Text style={styles.emptyText}>
-                        No hay tareas en este grupo.
-                      </Text>
-                    </View>
-                  ) : (
-                    group.tasks.map((task) => (
+                {isExpanded
+                  ? group.tasks.map((task) => (
                       <TaskCard
                         key={task.id}
                         task={task}
-                        getStatusLabel={getStatusLabel}
-                        getPriorityLabel={getPriorityLabel}
+                        isPartial={partialTaskIds.has(task.id)}
                         onCall={() => callCustomer(task.customerPhone)}
                         onMessage={() => messageCustomer(task.customerPhone)}
                         onMap={() => openMap(task)}
                         onOpen={() => openTask(task.id)}
                       />
                     ))
-                  )
-                ) : null}
+                  : null}
               </View>
             );
-          })}
-        </View>
-      ) : (
-        <View style={styles.listContainer}>
-          {tasks.length === 0 ? (
-            <View style={styles.emptyBox}>
-              <Text style={styles.emptyTitle}>No hay tareas para mostrar</Text>
-              <Text style={styles.emptyText}>
-                Sin tareas con el filtro o búsqueda actual.
-              </Text>
-            </View>
-          ) : (
-            routeGroups.map((group) => (
-              <View key={group.routeNumber} style={styles.routeGroupCard}>
-                <View style={styles.routeGroupHeader}>
-                  <Text style={styles.routeGroupTitle}>
-                    Ruta {group.routeNumber}
-                  </Text>
-                  <Text style={styles.routeGroupCount}>
-                    {group.tasks.length}
-                  </Text>
-                </View>
-
-                {group.tasks.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    getStatusLabel={getStatusLabel}
-                    getPriorityLabel={getPriorityLabel}
-                    onCall={() => callCustomer(task.customerPhone)}
-                    onMessage={() => messageCustomer(task.customerPhone)}
-                    onMap={() => openMap(task)}
-                    onOpen={() => openTask(task.id)}
-                  />
-                ))}
-              </View>
-            ))
-          )}
-        </View>
-      )}
-
-      <Pressable
-        style={styles.homeButton}
-        onPress={() => router.push('/agent-dashboard' as unknown as Href)}
-      >
-        <Text style={styles.homeButtonText}>Inicio</Text>
-      </Pressable>
+          })
+        )}
+      </View>
     </AgentScreen>
   );
 }
 
-function getStatusBadgeStyle(status: TaskListItem['status']) {
-  if (status === 'completed') {
-    return styles.statusCompleted;
-  }
+function getStatusLabel(status: TaskListItem['status'], isPartial: boolean) {
+  if (status === 'completed') return isPartial ? 'Parcial' : 'Exitosa';
+  if (status === 'unsuccessful') return 'No exitosa';
+  if (status === 'rescheduled') return 'Reprogramada';
+  if (status === 'in_progress') return 'En progreso';
+  if (status === 'cancelled') return 'Cancelada';
+  return 'Pendiente';
+}
 
-  if (status === 'unsuccessful') {
-    return styles.statusUnsuccessful;
-  }
-
-  if (status === 'rescheduled') {
-    return styles.statusRescheduled;
-  }
-
+function getStatusBadgeStyle(status: TaskListItem['status'], isPartial: boolean) {
+  if (status === 'completed' && isPartial) return styles.statusPartial;
+  if (status === 'completed') return styles.statusCompleted;
+  if (status === 'unsuccessful') return styles.statusUnsuccessful;
   return styles.statusPending;
 }
 
+function getTaskTypeLabel(task: TaskListItem): string {
+  if (task.lastMileTaskType === 'delivery' || task.taskType === 'last_mile_delivery') {
+    return 'Entrega';
+  }
+
+  if (task.lastMileTaskType === 'pickup' || task.taskType === 'last_mile_pickup') {
+    return 'Recojo';
+  }
+
+  return task.taskType ?? 'Tarea';
+}
+
 function getFilterLabel(filter: TaskFilter): string {
-  if (filter === 'pending') {
-    return 'Pendientes';
-  }
-
-  if (filter === 'in_progress') {
-    return 'En progreso';
-  }
-
-  if (filter === 'completed') {
-    return 'Completadas';
-  }
-
-  if (filter === 'unsuccessful') {
-    return 'No exitosas';
-  }
-
-  if (filter === 'partials') {
-    return 'Parciales';
-  }
-
+  if (filter === 'pending') return 'Pendientes';
+  if (filter === 'completed') return 'Exitosas';
+  if (filter === 'unsuccessful') return 'No exitosas';
   return 'Todas';
 }
 
@@ -557,21 +426,26 @@ function FilterChip({
 
 function TaskCard({
   task,
-  getStatusLabel,
-  getPriorityLabel,
+  isPartial,
   onCall,
   onMessage,
   onMap,
   onOpen,
 }: {
   task: TaskListItem;
-  getStatusLabel: (status: TaskListItem['status']) => string;
-  getPriorityLabel: (priority?: TaskListItem['priority']) => string;
+  isPartial: boolean;
   onCall: () => void;
   onMessage: () => void;
   onMap: () => void;
   onOpen: () => void;
 }) {
+  const location = getDisplayZone({
+    zone: task.zone,
+    department: task.department,
+    province: task.province,
+    district: task.district,
+  });
+
   return (
     <Pressable
       style={({ pressed }) => [
@@ -582,69 +456,41 @@ function TaskCard({
     >
       <View style={styles.taskHeader}>
         <Text style={styles.taskNumber}>{task.taskNumber ?? task.id}</Text>
-
-        <Text style={[styles.statusBadge, getStatusBadgeStyle(task.status)]}>
-  {getStatusLabel(task.status)}
-</Text>
+        <Text
+          style={[
+            styles.statusBadge,
+            getStatusBadgeStyle(task.status, isPartial),
+          ]}
+        >
+          {getStatusLabel(task.status, isPartial)}
+        </Text>
       </View>
 
-            <Text style={styles.customerName} numberOfLines={1}>
+      <Text style={styles.customerName} numberOfLines={1}>
         {task.customerName ?? 'Cliente sin nombre'}
       </Text>
 
+      <Text style={styles.taskType}>{getTaskTypeLabel(task)}</Text>
+
       <Text style={styles.taskMeta} numberOfLines={1}>
-        Proyecto/Tipo: {task.project ?? '-'} / {task.taskType ?? '-'}
+        Cuenta/Proyecto: {task.orderCode ?? '-'} / {task.project ?? '-'}
       </Text>
 
-      <View style={styles.infoRow}>
-        {task.routeNumber ? (
-          <Text style={styles.infoPill}>Ruta: {task.routeNumber}</Text>
-        ) : null}
-
-        {task.lastMileTaskType ? (
-          <Text style={styles.infoPill}>
-            {task.lastMileTaskType === 'delivery' ? 'Entrega' : 'Recojo'}
-          </Text>
-        ) : null}
-
-        {task.packageCount ? (
-          <Text style={styles.infoPill}>{task.packageCount} bultos/items</Text>
-        ) : null}
-      </View>
+      <Text style={styles.taskMeta} numberOfLines={1}>
+        Telefono: {task.customerPhone ?? '-'}
+      </Text>
 
       <Text style={styles.taskMeta} numberOfLines={1}>
-  Teléfono: {task.customerPhone ?? '-'}
-</Text>
-
-      <Text style={styles.taskMeta} numberOfLines={1}>
-        Ubicación: {task.department ?? '-'} / {task.province ?? '-'} /{' '}
-        {task.district ?? '-'}
+        Ubicacion: {location}
       </Text>
 
       <Text style={styles.addressText} numberOfLines={2}>
-        Dirección: {task.address ?? 'Dirección no registrada'}
+        Direccion: {task.address ?? 'Direccion no registrada'}
       </Text>
 
       <Text style={styles.taskMeta} numberOfLines={1}>
-        Zona: {getDisplayZone({
-    zone: task.zone,
-    department: task.department,
-    province: task.province,
-    district: task.district,
-  })}
+        Cantidad bultos/items: {task.packageCount ?? '-'}
       </Text>
-
-      {task.isDirty ? (
-        <Text style={styles.warningText}>
-          Tiene cambios locales pendientes de sincronización.
-        </Text>
-      ) : null}
-
-      {task.isLocked ? (
-        <Text style={styles.dangerText}>
-          Bloqueada: {task.lockReason ?? 'Sin motivo registrado'}
-        </Text>
-      ) : null}
 
       {task.hasPendingLiquidation ? (
         <Text style={styles.dangerText}>
@@ -652,11 +498,16 @@ function TaskCard({
         </Text>
       ) : null}
 
-            <View style={styles.quickActions}>
+      {task.isDirty ? (
+        <Text style={styles.warningText}>
+          Tiene cambios pendientes de sincronizacion.
+        </Text>
+      ) : null}
+
+      <View style={styles.quickActions}>
         <QuickAction iconName="call-outline" onPress={onCall} />
         <QuickAction iconName="logo-whatsapp" onPress={onMessage} />
         <QuickAction iconName="location-outline" onPress={onMap} />
-        <QuickAction iconName="eye-outline" onPress={onOpen} />
       </View>
     </Pressable>
   );
@@ -750,6 +601,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  routeGroupTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  groupChevron: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#061A44',
+  },
   routeGroupTitle: {
     fontSize: 15,
     fontWeight: '900',
@@ -766,45 +628,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 12,
     fontWeight: '900',
-  },
-  groupList: {
-    gap: 12,
-  },
-  groupCard: {
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 14,
-    backgroundColor: '#fff',
-    gap: 12,
-  },
-  groupHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  groupTitleWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flex: 1,
-  },
-  groupChevron: {
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  groupTitle: {
-    fontSize: 17,
-    fontWeight: '900',
-    flex: 1,
-  },
-  groupCount: {
-    fontSize: 13,
-    fontWeight: '900',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    backgroundColor: '#eee',
   },
   emptyBox: {
     padding: 18,
@@ -823,13 +646,17 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     lineHeight: 18,
   },
-    taskCard: {
+  taskCard: {
     padding: 11,
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 13,
     backgroundColor: '#fff',
     gap: 5,
+  },
+  taskCardPressed: {
+    opacity: 0.82,
+    transform: [{ scale: 0.995 }],
   },
   taskHeader: {
     flexDirection: 'row',
@@ -842,54 +669,48 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     flex: 1,
   },
- statusBadge: {
-  fontSize: 12,
-  fontWeight: '900',
-  paddingVertical: 4,
-  paddingHorizontal: 8,
-  borderRadius: 999,
-},
-statusPending: {
-  backgroundColor: '#eeeeee',
-  color: '#333333',
-},
-statusCompleted: {
-  backgroundColor: '#e8f5ee',
-  color: '#137333',
-},
-statusUnsuccessful: {
-  backgroundColor: '#fdecec',
-  color: '#b42318',
-},
-statusRescheduled: {
-  backgroundColor: '#fff3df',
-  color: '#9a6200',
-},
-    customerName: {
+  statusBadge: {
+    fontSize: 12,
+    fontWeight: '900',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  statusPending: {
+    backgroundColor: '#eeeeee',
+    color: '#333333',
+  },
+  statusCompleted: {
+    backgroundColor: '#e8f5ee',
+    color: '#137333',
+  },
+  statusPartial: {
+    backgroundColor: '#fff3df',
+    color: '#9a6200',
+  },
+  statusUnsuccessful: {
+    backgroundColor: '#fdecec',
+    color: '#b42318',
+  },
+  customerName: {
     fontSize: 15,
     fontWeight: '900',
   },
-    taskMeta: {
+  taskType: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#061A44',
+  },
+  taskMeta: {
     fontSize: 11,
     opacity: 0.78,
     lineHeight: 15,
   },
-    addressText: {
+  addressText: {
     fontSize: 12,
     lineHeight: 16,
     fontWeight: '600',
-  },
-  infoRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  infoPill: {
-    fontSize: 12,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 999,
-    backgroundColor: '#f2f2f2',
   },
   warningText: {
     fontSize: 12,
@@ -901,7 +722,7 @@ statusRescheduled: {
     color: '#9b1c1c',
     lineHeight: 17,
   },
-    quickActions: {
+  quickActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: 8,
@@ -914,21 +735,5 @@ statusRescheduled: {
     justifyContent: 'center',
     borderRadius: 10,
     backgroundColor: '#f3f3f3',
-  },
-  
-  homeButton: {
-    paddingVertical: 13,
-    alignItems: 'center',
-    borderRadius: 12,
-    backgroundColor: '#eeeeee',
-  },
-  homeButtonText: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  
-    taskCardPressed: {
-    opacity: 0.82,
-    transform: [{ scale: 0.995 }],
   },
 });

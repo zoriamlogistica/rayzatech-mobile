@@ -5,6 +5,7 @@ import type { Task } from '@/domain/tasks/task.types';
 import {
   countEvidencesByTask,
   getEvidenceById,
+  listEvidencesByTask,
 } from '@/infrastructure/db/repositories/evidenceRepository';
 import { countGpsPointsByTask } from '@/infrastructure/db/repositories/gpsRepository';
 import {
@@ -86,6 +87,7 @@ export type TaskDetailSnapshot = {
   task: Task | null;
   series: Awaited<ReturnType<typeof listTaskSeries>>;
   recoveredDevices: Awaited<ReturnType<typeof listRecoveredDevicesByTask>>;
+  evidences: Awaited<ReturnType<typeof listEvidencesByTask>>;
   managementHistory: TaskManagementHistoryItem[];
   events: Awaited<ReturnType<typeof listTaskEvents>>;
   seriesCounters: Awaited<ReturnType<typeof countSeriesByTask>>;
@@ -106,6 +108,7 @@ export type AgentTaskSummary = {
     cancelled: number;
   };
   partialTasks: number;
+  pendingLiquidationTasks: number;
   effectivenessGeneral: number;
   pendingSyncItems: number;
   dirtyTasks: number;
@@ -270,6 +273,7 @@ export async function getTaskDetailSnapshot(
   const task = await getTaskById(taskId);
 const series = await listTaskSeries(taskId);
 const recoveredDevices = await listRecoveredDevicesByTask(taskId);
+const evidences = await listEvidencesByTask(taskId);
 const managements = await listTaskManagementsByTask(taskId);
 
 const managementHistory = await Promise.all(
@@ -308,6 +312,7 @@ const evidenceCounters = await countEvidencesByTask(taskId);
     task,
     series,
     recoveredDevices,
+    evidences,
     managementHistory,
     events,
     seriesCounters,
@@ -361,6 +366,10 @@ export async function getAgentTaskSummary(filter?: {
     cancelled: visibleTasks.filter((task) => task.status === 'cancelled').length,
   };
 
+  const pendingLiquidationTasks = visibleTasks.filter(
+    (task) => task.hasPendingLiquidation
+  ).length;
+
   const latestManagements = await Promise.all(
     visibleTasks.map(async (task) => {
       const managements = await listTaskManagementsByTask(task.id);
@@ -391,6 +400,7 @@ export async function getAgentTaskSummary(filter?: {
     totalTasks: visibleTasks.length,
     byStatus,
     partialTasks,
+    pendingLiquidationTasks,
     effectivenessGeneral,
     pendingSyncItems,
     dirtyTasks: visibleTasks.filter((task) => task.isDirty).length,

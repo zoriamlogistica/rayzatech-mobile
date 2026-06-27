@@ -16,6 +16,75 @@ type MobileTaskManagementSyncResponse = {
   idempotent?: boolean;
 };
 
+function getObservationValue(
+  observation: string | undefined,
+  label: string
+): string | null {
+  if (!observation) {
+    return null;
+  }
+
+  const prefix = `${label}:`;
+  const line = observation
+    .split('\n')
+    .find((item) => item.trim().toLowerCase().startsWith(prefix.toLowerCase()));
+
+  if (!line) {
+    return null;
+  }
+
+  const value = line.slice(prefix.length).trim();
+  return value || null;
+}
+
+function buildLastMilePayload(
+  task: Awaited<ReturnType<typeof getTaskById>>,
+  management: Awaited<ReturnType<typeof getTaskManagementById>>
+) {
+  if (!task || !management || task.fieldOperationType !== 'last_mile') {
+    return {};
+  }
+
+  const observation = management.observation;
+  const lastMileResult = getObservationValue(
+    observation,
+    'Resultado ultima milla'
+  );
+  const lastMileSubstatus =
+    getObservationValue(observation, 'Subestado') ?? management.reason ?? null;
+  const merchandiseCondition = getObservationValue(
+    observation,
+    'Condicion mercaderia'
+  );
+  const packageCountText = getObservationValue(
+    observation,
+    'Cantidad bultos/items gestionados'
+  );
+  const operationNumber = getObservationValue(observation, 'Numero operacion');
+  const isPickup =
+    task.lastMileTaskType === 'pickup' || task.taskType === 'last_mile_pickup';
+  const requiresLiquidation =
+    (isPickup && management.resultStatus === 'successful') ||
+    normalizeForCompare(merchandiseCondition) === 'items sobrantes';
+
+  return {
+    lastMileResult,
+    lastMileSubstatus,
+    merchandiseCondition,
+    packageCount: packageCountText ? Number(packageCountText) || null : null,
+    operationNumber,
+    requiresLiquidation,
+  };
+}
+
+function normalizeForCompare(value?: string | null): string {
+  return (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
 export async function syncTaskManagementToRemote(
   managementId: string
 ): Promise<MobileTaskManagementSyncResponse> {
@@ -50,6 +119,7 @@ export async function syncTaskManagementToRemote(
       rescheduleDate: management.rescheduleDate ?? null,
       rescheduleTimeRange: management.rescheduleTimeRange ?? null,
       managedAt: management.managedAt,
+      ...buildLastMilePayload(task, management),
     } satisfies Record<string, unknown>
   );
 

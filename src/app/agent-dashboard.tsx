@@ -22,6 +22,7 @@ type DashboardState = {
   rescheduled: number;
   unsuccessful: number;
   partials: number;
+  pendingLiquidation: number;
   effectivenessGeneral: number;
   sync: {
     totalPending: number;
@@ -41,6 +42,7 @@ completed: 0,
 rescheduled: 0,
 unsuccessful: 0,
 partials: 0,
+pendingLiquidation: 0,
 effectivenessGeneral: 0,
     sync: {
       totalPending: 0,
@@ -107,6 +109,7 @@ completed: summary.byStatus.completed,
 rescheduled: summary.byStatus.rescheduled,
 unsuccessful: summary.byStatus.unsuccessful,
 partials: summary.partialTasks,
+pendingLiquidation: summary.pendingLiquidationTasks,
 effectivenessGeneral: summary.effectivenessGeneral,
   sync: syncCounters,
   loadedAt: new Date().toISOString(),
@@ -270,7 +273,7 @@ effectivenessGeneral: summary.effectivenessGeneral,
           <MetricCard
             label="Parciales"
             value={dashboard.partials}
-            onPress={() => router.push('/agent-tasks?filter=partials' as Href)}
+            onPress={() => router.push('/agent-tasks?filter=completed' as Href)}
             icon="½"
             tone="amber"
           />
@@ -323,6 +326,20 @@ effectivenessGeneral: summary.effectivenessGeneral,
         </View>
         )}
       </View>
+
+      {isLastMile && dashboard.pendingLiquidation > 0 ? (
+        <Pressable
+          style={styles.liquidationAlert}
+          onPress={() => router.push('/agent-managed-tasks' as Href)}
+        >
+          <Text style={styles.liquidationAlertTitle}>
+            Mercaderia pendiente de liquidar
+          </Text>
+          <Text style={styles.liquidationAlertText}>
+            {dashboard.pendingLiquidation} tarea(s) requieren cierre en almacen.
+          </Text>
+        </Pressable>
+      ) : null}
 
       <View style={styles.syncMiniCard}>
         <Text style={styles.syncMiniTitle}>Sincronización</Text>
@@ -602,6 +619,24 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     backgroundColor: '#FFFFFF',
     gap: 10,
+  },
+  liquidationAlert: {
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#F4B4B4',
+    backgroundColor: '#FFF4F4',
+    gap: 4,
+  },
+  liquidationAlertTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#9B1C1C',
+  },
+  liquidationAlertText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#9B1C1C',
   },
   syncMiniTitle: {
     fontSize: 15,
