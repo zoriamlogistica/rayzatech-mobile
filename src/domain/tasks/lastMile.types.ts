@@ -51,6 +51,15 @@ export const PARTIAL_DELIVERY_MERCHANDISE_CONDITIONS = [
   'Entrega complementaria correspondiente a guia entregada anteriormente',
 ] as const;
 
+export const PICKUP_CONFORME_MERCHANDISE_CONDITIONS = [
+  'Conforme a guia',
+] as const;
+
+export const PARTIAL_PICKUP_MERCHANDISE_CONDITIONS = [
+  'Items faltantes',
+  'Por indicacion de soporte',
+] as const;
+
 export const LAST_MILE_EVIDENCE_RULES = {
   deliveredOrPartial: [
     {

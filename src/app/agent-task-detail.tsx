@@ -39,6 +39,8 @@ import {
   LAST_MILE_PICKUP_RESULTS,
   MERCHANDISE_CONDITIONS,
   PARTIAL_DELIVERY_MERCHANDISE_CONDITIONS,
+  PARTIAL_PICKUP_MERCHANDISE_CONDITIONS,
+  PICKUP_CONFORME_MERCHANDISE_CONDITIONS,
 } from '@/domain/tasks/lastMile.types';
 import {
   RESCHEDULE_REASONS,
@@ -211,6 +213,17 @@ function formatValue(value?: string | number | null): string {
   return String(value);
 }
 
+function formatLocationForDetail(params: {
+  department?: string | null;
+  province?: string | null;
+  district?: string | null;
+}): string {
+  return [params.department, params.province, params.district]
+    .map((value) => value?.trim())
+    .filter(Boolean)
+    .join(' / ');
+}
+
 function formatDateTime(value?: string): string {
   return formatLimaDateTime(value);
 }
@@ -260,9 +273,18 @@ function isCashOnDeliverySubstate(substate: string): boolean {
 function getMerchandiseConditionOptions(params: {
   isUnsuccessful: boolean;
   substate: string;
+  isPickup: boolean;
 }): string[] {
   if (params.isUnsuccessful) {
     return [];
+  }
+
+  if (params.isPickup && params.substate === 'Recojo conforme') {
+    return [...PICKUP_CONFORME_MERCHANDISE_CONDITIONS];
+  }
+
+  if (params.isPickup && params.substate === 'Recojo parcial') {
+    return [...PARTIAL_PICKUP_MERCHANDISE_CONDITIONS];
   }
 
   if (isDeliveryPartialSubstate(params.substate)) {
@@ -275,6 +297,7 @@ function getMerchandiseConditionOptions(params: {
 function getDefaultMerchandiseCondition(params: {
   isUnsuccessful: boolean;
   substate: string;
+  isPickup: boolean;
 }): string {
   return getMerchandiseConditionOptions(params)[0] ?? '';
 }
@@ -609,6 +632,7 @@ async function syncImmediatelyAfterManagement(): Promise<boolean> {
       getDefaultMerchandiseCondition({
         isUnsuccessful: defaultLastMileIsUnsuccessful,
         substate: defaultLastMileSubstate,
+        isPickup: isLastMilePickup(snapshot?.task),
       })
     );
     setDeviceForms([
@@ -1482,12 +1506,16 @@ async function openCustomerMap() {
       resetManagementForm();
 
       const synced = await syncImmediatelyAfterManagement();
+      const gpsWarning = location.mocked
+        ? '\n\nAlerta: el celular reporto posible ubicacion falsa o simulada.'
+        : '';
 
       Alert.alert(
         'Gestion registrada',
-        synced
+        (synced
           ? 'La gestion de ultima milla fue registrada y sincronizada.'
-          : 'La gestion quedo guardada en el telefono y pendiente de sincronizar.'
+          : 'La gestion quedo guardada en el telefono y pendiente de sincronizar.') +
+          gpsWarning
       );
 
       await loadDetail();
@@ -1511,6 +1539,7 @@ async function openCustomerMap() {
   const lastMileConditionOptions = getMerchandiseConditionOptions({
     isUnsuccessful: lastMileIsUnsuccessful,
     substate: lastMileSubstate,
+    isPickup: isLastMilePickup(task),
   });
   const shouldShowLastMileCondition =
     taskIsLastMile && !lastMileIsUnsuccessful;
@@ -1614,9 +1643,11 @@ async function openCustomerMap() {
               <DetailRow label="CONTACTO" value={task.contactData} />
               <DetailRow
                 label="UBICACION"
-                value={`${formatValue(task.department)} / ${formatValue(
-                  task.province
-                )} / ${formatValue(task.district)}`}
+                value={formatLocationForDetail({
+                  department: task.department,
+                  province: task.province,
+                  district: task.district,
+                })}
               />
               <DetailRow label="Zona" value={getDisplayZone(task)} />
               <DetailRow
@@ -1891,30 +1922,39 @@ task?.remoteId ? (
               />
             ) : null}
 
-            <TextInput
-              value={lastMilePackageCount}
-              onChangeText={setLastMilePackageCount}
-              placeholder="Cantidad bultos/items gestionados"
-              style={styles.input}
-              keyboardType="numeric"
-            />
+            <View style={styles.fieldBlock}>
+              <Text style={styles.inputLabel}>Cantidad bultos/items</Text>
+              <TextInput
+                value={lastMilePackageCount}
+                onChangeText={setLastMilePackageCount}
+                placeholder="Cantidad bultos/items gestionados"
+                style={styles.input}
+                keyboardType="numeric"
+              />
+            </View>
 
             {shouldShowOperationNumber ? (
-              <TextInput
-                value={lastMileOperationNumber}
-                onChangeText={setLastMileOperationNumber}
-                placeholder="Numero de operacion"
-                style={styles.input}
-              />
+              <View style={styles.fieldBlock}>
+                <Text style={styles.inputLabel}>Numero de operacion</Text>
+                <TextInput
+                  value={lastMileOperationNumber}
+                  onChangeText={setLastMileOperationNumber}
+                  placeholder="Numero de operacion"
+                  style={styles.input}
+                />
+              </View>
             ) : null}
 
-            <TextInput
-              value={managementObservation}
-              onChangeText={setManagementObservation}
-              placeholder="Observaciones de la gestion"
-              style={styles.input}
-              multiline
-            />
+            <View style={styles.fieldBlock}>
+              <Text style={styles.inputLabel}>Observaciones</Text>
+              <TextInput
+                value={managementObservation}
+                onChangeText={setManagementObservation}
+                placeholder="Observaciones de la gestion"
+                style={styles.input}
+                multiline
+              />
+            </View>
 
             <Pressable
               style={styles.photoButton}
@@ -2332,6 +2372,7 @@ task?.remoteId ? (
               getDefaultMerchandiseCondition({
                 isUnsuccessful: nextIsUnsuccessful,
                 substate: nextSubstate,
+                isPickup: isLastMilePickup(task),
               })
             );
           }
@@ -2353,6 +2394,7 @@ task?.remoteId ? (
             getDefaultMerchandiseCondition({
               isUnsuccessful: lastMileIsUnsuccessful,
               substate: value,
+              isPickup: isLastMilePickup(task),
             })
           );
           setIsLastMileSubstateModalOpen(false);
@@ -2464,6 +2506,15 @@ function DetailRow({
   label: string;
   value?: string | number | null;
 }) {
+  if (
+    value === undefined ||
+    value === null ||
+    String(value).trim() === '' ||
+    String(value).trim() === '-'
+  ) {
+    return null;
+  }
+
   return (
     <View style={styles.detailRow}>
       <Text style={styles.detailLabel}>{label}</Text>
@@ -3053,6 +3104,9 @@ modalScrollContent: {
     fontSize: 12,
     fontWeight: '900',
     opacity: 0.75,
+  },
+  fieldBlock: {
+    gap: 6,
   },
   input: {
     borderWidth: 1,

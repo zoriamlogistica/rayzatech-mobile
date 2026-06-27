@@ -1,6 +1,5 @@
 // src/infrastructure/remote/mobileTaskManagementSync.ts
 
-
 import {
   getTaskManagementById,
   markTaskManagementAsSyncedWithRemoteId,
@@ -36,39 +35,29 @@ export async function syncTaskManagementToRemote(
     throw new Error(`TASK_REMOTE_ID_MISSING:${management.taskId}`);
   }
 
-console.log('[MANAGEMENT SYNC DEBUG] enviando gestión:', {
-  localId: management.id,
-  remoteId: management.remoteId,
-  taskId: management.taskId,
-  remoteTaskId: task.remoteId,
-  resultStatus: management.resultStatus,
-  managedAt: management.managedAt,
-  generalEvidenceId: management.generalEvidenceId,
-});
-
   const response = await mobileApiPost<MobileTaskManagementSyncResponse>(
-  '/api/mobile/task-managements',
-  {
-    localId: management.id,
-    remoteTaskId: task.remoteId,
-    resultStatus: management.resultStatus,
-    reason: management.reason ?? null,
-    observation: management.observation ?? null,
-    latitude: management.latitude ?? null,
-    longitude: management.longitude ?? null,
-    accuracy: management.accuracy ?? null,
-    mocked: management.mocked ?? false,
-    rescheduleDate: management.rescheduleDate ?? null,
-    rescheduleTimeRange: management.rescheduleTimeRange ?? null,
-    managedAt: management.managedAt,
-  } satisfies Record<string, unknown>
-);
+    '/api/mobile/task-managements',
+    {
+      localId: management.id,
+      remoteTaskId: task.remoteId,
+      resultStatus: management.resultStatus,
+      reason: management.reason ?? null,
+      observation: management.observation ?? null,
+      latitude: management.latitude ?? null,
+      longitude: management.longitude ?? null,
+      accuracy: management.accuracy ?? null,
+      mocked: management.mocked ?? false,
+      rescheduleDate: management.rescheduleDate ?? null,
+      rescheduleTimeRange: management.rescheduleTimeRange ?? null,
+      managedAt: management.managedAt,
+    } satisfies Record<string, unknown>
+  );
 
-await markTaskManagementAsSyncedWithRemoteId({
-  id: management.id,
-  remoteId: response.remoteId,
-  remoteUpdatedAt: response.syncedAt,
-});
+  await markTaskManagementAsSyncedWithRemoteId({
+    id: management.id,
+    remoteId: response.remoteId,
+    remoteUpdatedAt: response.syncedAt,
+  });
 
-return response;
+  return response;
 }
