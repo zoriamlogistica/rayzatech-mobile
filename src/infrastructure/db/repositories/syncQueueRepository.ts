@@ -274,7 +274,8 @@ export async function countPendingSyncItems(): Promise<number> {
     `
       SELECT COUNT(*) as total
       FROM sync_queue
-      WHERE status IN ('pending', 'failed', 'conflict');
+      WHERE status IN ('pending', 'failed')
+        AND attempt_count < max_attempts;
     `
   );
 

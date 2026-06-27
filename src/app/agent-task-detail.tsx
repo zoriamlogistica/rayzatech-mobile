@@ -38,6 +38,7 @@ import {
   LAST_MILE_DELIVERY_RESULTS,
   LAST_MILE_PICKUP_RESULTS,
   MERCHANDISE_CONDITIONS,
+  PARTIAL_DELIVERY_MERCHANDISE_CONDITIONS,
 } from '@/domain/tasks/lastMile.types';
 import {
   RESCHEDULE_REASONS,
@@ -88,7 +89,13 @@ type DeviceForm = {
 };
 
 const MAX_DEVICES_PER_MANAGEMENT = 10;
+const MAX_LAST_MILE_EVIDENCE_PHOTOS = 10;
 const MAX_RECOMMENDED_EVIDENCE_SIZE_BYTES = 2 * 1024 * 1024;
+
+type EvidencePreview = {
+  id: string;
+  uri: string;
+};
 
 type LastMileResultKey =
   | keyof typeof LAST_MILE_DELIVERY_RESULTS
@@ -240,6 +247,36 @@ function getLastMileTaskLabel(task?: {
   taskType?: string;
 } | null) {
   return isLastMilePickup(task) ? 'Recojo' : 'Entrega';
+}
+
+function isDeliveryPartialSubstate(substate: string): boolean {
+  return substate === 'Entrega parcial';
+}
+
+function isCashOnDeliverySubstate(substate: string): boolean {
+  return substate === 'Pedido contra entrega pagado con POS/TRANS/YAPE/EFECTIVO';
+}
+
+function getMerchandiseConditionOptions(params: {
+  isUnsuccessful: boolean;
+  substate: string;
+}): string[] {
+  if (params.isUnsuccessful) {
+    return [];
+  }
+
+  if (isDeliveryPartialSubstate(params.substate)) {
+    return [...PARTIAL_DELIVERY_MERCHANDISE_CONDITIONS];
+  }
+
+  return [...MERCHANDISE_CONDITIONS];
+}
+
+function getDefaultMerchandiseCondition(params: {
+  isUnsuccessful: boolean;
+  substate: string;
+}): string {
+  return getMerchandiseConditionOptions(params)[0] ?? '';
 }
 
 function getLastMileResultOptions(task?: {
@@ -410,7 +447,7 @@ export default function AgentTaskDetailScreen() {
   const [lastMilePackageCount, setLastMilePackageCount] = useState('');
   const [lastMileOperationNumber, setLastMileOperationNumber] = useState('');
   const [lastMileMerchandiseCondition, setLastMileMerchandiseCondition] =
-    useState<string>(MERCHANDISE_CONDITIONS[2]);
+    useState<string>(MERCHANDISE_CONDITIONS[0]);
   const [deviceForms, setDeviceForms] = useState<DeviceForm[]>([
   createDeviceForm(),
 ]);
@@ -436,6 +473,12 @@ const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 const [generalEvidenceUri, setGeneralEvidenceUri] = useState<string | undefined>();
 const [houseFrontEvidenceId, setHouseFrontEvidenceId] = useState<string | undefined>();
 const [houseFrontEvidenceUri, setHouseFrontEvidenceUri] = useState<string | undefined>();
+const [lastMileEvidencePhotos, setLastMileEvidencePhotos] = useState<
+  EvidencePreview[]
+>([]);
+const [lastMileFacadePhotos, setLastMileFacadePhotos] = useState<
+  EvidencePreview[]
+>([]);
 
   async function handleError(error: unknown) {
     const fieldError = classifyFieldError(error);
@@ -547,18 +590,27 @@ async function syncImmediatelyAfterManagement(): Promise<boolean> {
   function resetManagementForm() {
     const lastMileOptions = getLastMileResultOptions(snapshot?.task);
     const defaultLastMileResult = lastMileOptions[0];
+    const defaultLastMileSubstate = defaultLastMileResult?.substates[0] ?? '';
+    const defaultLastMileIsUnsuccessful =
+      defaultLastMileResult?.key === 'not_delivered' ||
+      defaultLastMileResult?.key === 'not_picked_up';
 
     setSelectedStatus('successful');
     setManagementObservation('');
     setLastMileResultKey(defaultLastMileResult?.key ?? 'delivered');
-    setLastMileSubstate(defaultLastMileResult?.substates[0] ?? '');
+    setLastMileSubstate(defaultLastMileSubstate);
     setLastMilePackageCount(
       snapshot?.task?.packageCount == null
         ? ''
         : String(snapshot.task.packageCount)
     );
     setLastMileOperationNumber('');
-    setLastMileMerchandiseCondition(MERCHANDISE_CONDITIONS[2]);
+    setLastMileMerchandiseCondition(
+      getDefaultMerchandiseCondition({
+        isUnsuccessful: defaultLastMileIsUnsuccessful,
+        substate: defaultLastMileSubstate,
+      })
+    );
     setDeviceForms([
   {
     ...createDeviceForm(),
@@ -574,6 +626,8 @@ setSelectedDeviceFormId(null);
 setGeneralEvidenceUri(undefined);
 setHouseFrontEvidenceId(undefined);
 setHouseFrontEvidenceUri(undefined);
+setLastMileEvidencePhotos([]);
+setLastMileFacadePhotos([]);
   }
 
   function updateDeviceForm(
@@ -848,6 +902,126 @@ async function captureHouseFrontEvidencePhoto() {
   } finally {
     setIsLoading(false);
   }
+}
+
+async function captureLastMileEvidencePhoto() {
+  if (!taskId) {
+    return;
+  }
+
+  if (lastMileEvidencePhotos.length >= MAX_LAST_MILE_EVIDENCE_PHOTOS) {
+    Alert.alert(
+      'Limite alcanzado',
+      `Solo puedes registrar hasta ${MAX_LAST_MILE_EVIDENCE_PHOTOS} fotos por gestion.`
+    );
+    return;
+  }
+
+  try {
+    setIsLoading(true);
+
+    const result = await captureRealEvidenceForTaskOffline({
+      taskId,
+      evidenceType: 'recovery_proof',
+    });
+
+    if (!result) {
+      return;
+    }
+
+    setGeneralEvidenceId((current) => current ?? result.evidence.id);
+    setGeneralEvidenceUri((current) => current ?? result.evidence.localUri);
+    setLastMileEvidencePhotos((current) => [
+      ...current,
+      {
+        id: result.evidence.id,
+        uri: result.evidence.localUri,
+      },
+    ]);
+
+    await warnIfEvidenceIsHeavy({
+      evidenceId: result.evidence.id,
+      evidenceType: result.evidence.evidenceType,
+      sizeBytes: result.evidence.sizeBytes,
+      taskId,
+    });
+  } catch (error) {
+    await handleError(error);
+  } finally {
+    setIsLoading(false);
+  }
+}
+
+async function captureLastMileFacadePhoto() {
+  if (!taskId) {
+    return;
+  }
+
+  if (lastMileFacadePhotos.length >= MAX_LAST_MILE_EVIDENCE_PHOTOS) {
+    Alert.alert(
+      'Limite alcanzado',
+      `Solo puedes registrar hasta ${MAX_LAST_MILE_EVIDENCE_PHOTOS} fotos por gestion.`
+    );
+    return;
+  }
+
+  try {
+    setIsLoading(true);
+
+    const result = await captureRealEvidenceForTaskOffline({
+      taskId,
+      evidenceType: 'house_front',
+    });
+
+    if (!result) {
+      return;
+    }
+
+    setHouseFrontEvidenceId((current) => current ?? result.evidence.id);
+    setHouseFrontEvidenceUri((current) => current ?? result.evidence.localUri);
+    setLastMileFacadePhotos((current) => [
+      ...current,
+      {
+        id: result.evidence.id,
+        uri: result.evidence.localUri,
+      },
+    ]);
+
+    await warnIfEvidenceIsHeavy({
+      evidenceId: result.evidence.id,
+      evidenceType: result.evidence.evidenceType,
+      sizeBytes: result.evidence.sizeBytes,
+      taskId,
+    });
+  } catch (error) {
+    await handleError(error);
+  } finally {
+    setIsLoading(false);
+  }
+}
+
+function removeLastMileEvidencePhoto(evidenceId: string) {
+  setLastMileEvidencePhotos((current) => {
+    const next = current.filter((photo) => photo.id !== evidenceId);
+    return next;
+  });
+
+  const next = lastMileEvidencePhotos.filter(
+    (photo) => photo.id !== evidenceId
+  );
+  setGeneralEvidenceId(next[0]?.id);
+  setGeneralEvidenceUri(next[0]?.uri);
+}
+
+function removeLastMileFacadePhoto(evidenceId: string) {
+  setLastMileFacadePhotos((current) => {
+    const next = current.filter((photo) => photo.id !== evidenceId);
+    return next;
+  });
+
+  const next = lastMileFacadePhotos.filter((photo) => photo.id !== evidenceId);
+  setHouseFrontEvidenceId(next[0]?.id);
+  setHouseFrontEvidenceUri(next[0]?.uri);
 }
 
 async function captureDeviceLabelEvidencePhoto(deviceFormId: string) {
@@ -1265,11 +1439,13 @@ async function openCustomerMap() {
       const observationParts = [
         `Resultado ultima milla: ${resultOption?.label ?? lastMileResultKey}`,
         `Subestado: ${lastMileSubstate}`,
-        `Condicion mercaderia: ${lastMileMerchandiseCondition}`,
+        !isUnsuccessful && lastMileMerchandiseCondition
+          ? `Condicion mercaderia: ${lastMileMerchandiseCondition}`
+          : null,
         lastMilePackageCount
           ? `Cantidad bultos/items gestionados: ${lastMilePackageCount}`
           : null,
-        lastMileOperationNumber
+        isCashOnDeliverySubstate(lastMileSubstate) && lastMileOperationNumber
           ? `Numero operacion: ${lastMileOperationNumber}`
           : null,
         managementObservation
@@ -1332,6 +1508,17 @@ async function openCustomerMap() {
   const lastMileIsUnsuccessful =
     lastMileResultKey === 'not_delivered' ||
     lastMileResultKey === 'not_picked_up';
+  const lastMileConditionOptions = getMerchandiseConditionOptions({
+    isUnsuccessful: lastMileIsUnsuccessful,
+    substate: lastMileSubstate,
+  });
+  const shouldShowLastMileCondition =
+    taskIsLastMile && !lastMileIsUnsuccessful;
+  const shouldShowOperationNumber =
+    taskIsLastMile && isCashOnDeliverySubstate(lastMileSubstate);
+  const visibleLastMilePhotos = lastMileIsUnsuccessful
+    ? lastMileFacadePhotos
+    : lastMileEvidencePhotos;
 
   return (
     <AgentScreen
@@ -1696,11 +1883,13 @@ task?.remoteId ? (
               onPress={() => setIsLastMileSubstateModalOpen(true)}
             />
 
-            <SelectorField
-              label="Condicion de mercaderia"
-              value={lastMileMerchandiseCondition}
-              onPress={() => setIsMerchandiseConditionModalOpen(true)}
-            />
+            {shouldShowLastMileCondition ? (
+              <SelectorField
+                label="Condicion de mercaderia"
+                value={lastMileMerchandiseCondition}
+                onPress={() => setIsMerchandiseConditionModalOpen(true)}
+              />
+            ) : null}
 
             <TextInput
               value={lastMilePackageCount}
@@ -1710,11 +1899,11 @@ task?.remoteId ? (
               keyboardType="numeric"
             />
 
-            {!lastMileIsUnsuccessful ? (
+            {shouldShowOperationNumber ? (
               <TextInput
                 value={lastMileOperationNumber}
                 onChangeText={setLastMileOperationNumber}
-                placeholder="Numero de operacion opcional"
+                placeholder="Numero de operacion"
                 style={styles.input}
               />
             ) : null}
@@ -1731,41 +1920,47 @@ task?.remoteId ? (
               style={styles.photoButton}
               onPress={
                 lastMileIsUnsuccessful
-                  ? captureHouseFrontEvidencePhoto
-                  : captureGeneralEvidencePhoto
+                  ? captureLastMileFacadePhoto
+                  : captureLastMileEvidencePhoto
               }
             >
               <Text style={styles.photoButtonText}>
                 {lastMileIsUnsuccessful
-                  ? houseFrontEvidenceId
-                    ? 'Foto fachada tomada'
-                    : 'Tomar foto fachada'
-                  : generalEvidenceId
-                    ? 'Evidencia tomada'
-                    : 'Tomar evidencia'}
+                  ? `Agregar foto fachada (${lastMileFacadePhotos.length}/${MAX_LAST_MILE_EVIDENCE_PHOTOS})`
+                  : `Agregar evidencia (${lastMileEvidencePhotos.length}/${MAX_LAST_MILE_EVIDENCE_PHOTOS})`}
               </Text>
             </Pressable>
 
-            {lastMileIsUnsuccessful && houseFrontEvidenceUri ? (
-              <PhotoThumbnail
-                uri={houseFrontEvidenceUri}
-                label="Fachada"
-                onPress={(uri) => setPreviewImageUri(uri)}
-              />
-            ) : null}
+            {visibleLastMilePhotos.length > 0 ? (
+              <View style={styles.lastMilePhotoGrid}>
+                {visibleLastMilePhotos.map((photo, index) => (
+                  <View key={photo.id} style={styles.lastMilePhotoItem}>
+                    <PhotoThumbnail
+                      uri={photo.uri}
+                      label={`Foto ${index + 1}`}
+                      onPress={(uri) => setPreviewImageUri(uri)}
+                    />
 
-            {!lastMileIsUnsuccessful && generalEvidenceUri ? (
-              <PhotoThumbnail
-                uri={generalEvidenceUri}
-                label="Evidencia"
-                onPress={(uri) => setPreviewImageUri(uri)}
-              />
+                    <Pressable
+                      style={styles.removePhotoButton}
+                      onPress={() =>
+                        lastMileIsUnsuccessful
+                          ? removeLastMileFacadePhoto(photo.id)
+                          : removeLastMileEvidencePhoto(photo.id)
+                      }
+                    >
+                      <Text style={styles.removePhotoButtonText}>X</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
             ) : null}
 
             <Text style={styles.helperText}>
               Para entrega o recojo conforme, registra evidencia del paquete,
-              guia, voucher o fachada segun corresponda. Para no exitosos,
-              evidencia la visita con foto de fachada.
+              guia, voucher o fachada segun corresponda. Puedes subir maximo
+              10 fotos por gestion. Para no exitosos, evidencia la visita con
+              foto de fachada.
             </Text>
           </View>
         ) : null}
@@ -2126,7 +2321,19 @@ task?.remoteId ? (
 
           if (selected) {
             setLastMileResultKey(selected.key);
-            setLastMileSubstate(selected.substates[0] ?? '');
+            const nextSubstate = selected.substates[0] ?? '';
+            const nextIsUnsuccessful =
+              selected.key === 'not_delivered' ||
+              selected.key === 'not_picked_up';
+
+            setLastMileSubstate(nextSubstate);
+            setLastMileOperationNumber('');
+            setLastMileMerchandiseCondition(
+              getDefaultMerchandiseCondition({
+                isUnsuccessful: nextIsUnsuccessful,
+                substate: nextSubstate,
+              })
+            );
           }
 
           setIsLastMileResultModalOpen(false);
@@ -2141,6 +2348,13 @@ task?.remoteId ? (
         onClose={() => setIsLastMileSubstateModalOpen(false)}
         onSelect={(value) => {
           setLastMileSubstate(value);
+          setLastMileOperationNumber('');
+          setLastMileMerchandiseCondition(
+            getDefaultMerchandiseCondition({
+              isUnsuccessful: lastMileIsUnsuccessful,
+              substate: value,
+            })
+          );
           setIsLastMileSubstateModalOpen(false);
         }}
       />
@@ -2148,7 +2362,7 @@ task?.remoteId ? (
       <OptionPickerModal
         visible={isMerchandiseConditionModalOpen}
         title="Condicion de mercaderia"
-        options={[...MERCHANDISE_CONDITIONS]}
+        options={lastMileConditionOptions}
         selectedValue={lastMileMerchandiseCondition}
         onClose={() => setIsMerchandiseConditionModalOpen(false)}
         onSelect={(value) => {
@@ -3080,6 +3294,32 @@ evidencePreviewRow: {
   flexDirection: 'row',
   alignItems: 'center',
   gap: 10,
+},
+lastMilePhotoGrid: {
+  flexDirection: 'row',
+  flexWrap: 'wrap',
+  gap: 10,
+},
+lastMilePhotoItem: {
+  position: 'relative',
+},
+removePhotoButton: {
+  position: 'absolute',
+  top: -7,
+  right: -7,
+  width: 24,
+  height: 24,
+  borderRadius: 12,
+  alignItems: 'center',
+  justifyContent: 'center',
+  backgroundColor: '#B91C1C',
+  borderWidth: 2,
+  borderColor: '#FFFFFF',
+},
+removePhotoButtonText: {
+  fontSize: 12,
+  fontWeight: '900',
+  color: '#FFFFFF',
 },
 evidenceSizeText: {
   fontSize: 11,

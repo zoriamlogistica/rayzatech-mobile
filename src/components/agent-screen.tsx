@@ -1,13 +1,15 @@
 // src/components/agent-screen.tsx
 
+import { Ionicons } from '@expo/vector-icons';
+import { router, type Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import {
-    Pressable,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -59,16 +61,25 @@ export function AgentScreen({
         </View>
 
         {showSyncButton ? (
-          <Pressable
-            style={[
-              styles.syncButton,
-              isSyncing || !onSyncPress ? styles.syncButtonDisabled : null,
-            ]}
-            disabled={isSyncing || !onSyncPress}
-            onPress={onSyncPress}
-          >
-            <Text style={styles.syncButtonText}>{isSyncing ? '…' : '🔄'}</Text>
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable
+              style={styles.homeIconButton}
+              onPress={() => router.push('/agent-dashboard' as Href)}
+            >
+              <Ionicons name="home-outline" size={22} color="#137333" />
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.syncButton,
+                isSyncing || !onSyncPress ? styles.syncButtonDisabled : null,
+              ]}
+              disabled={isSyncing || !onSyncPress}
+              onPress={onSyncPress}
+            >
+              <Ionicons name="sync-outline" size={22} color="#FFFFFF" />
+            </Pressable>
+          </View>
         ) : (
           <View style={styles.syncPlaceholder} />
         )}
@@ -96,7 +107,7 @@ const styles = StyleSheet.create({
   fixedHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
     paddingHorizontal: 20,
     paddingTop: 18,
     paddingBottom: 12,
@@ -118,6 +129,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     opacity: 0.7,
   },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  homeIconButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#BFE6CE',
+    backgroundColor: '#F2FBF6',
+  },
   syncButton: {
     width: 42,
     height: 42,
@@ -129,12 +154,8 @@ const styles = StyleSheet.create({
   syncButtonDisabled: {
     opacity: 0.6,
   },
-  syncButtonText: {
-    fontSize: 20,
-    color: '#fff',
-  },
   syncPlaceholder: {
-    width: 42,
+    width: 92,
     height: 42,
   },
   content: {

@@ -240,30 +240,37 @@ effectivenessGeneral: summary.effectivenessGeneral,
           <MetricCard
             label="Total"
             value={dashboard.totalTasks}
+            onPress={() => router.push('/agent-tasks?filter=all' as Href)}
             icon="□"
             tone="blue"
           />
           <MetricCard
             label="Pendientes"
             value={dashboard.pending}
+            onPress={() => router.push('/agent-tasks?filter=pending' as Href)}
             icon="⏱"
             tone="amber"
           />
           <MetricCard
             label="Exitosas"
             value={dashboard.completed}
+            onPress={() => router.push('/agent-tasks?filter=completed' as Href)}
             icon="✓"
             tone="green"
           />
           <MetricCard
             label="No exitoso"
             value={dashboard.unsuccessful}
+            onPress={() =>
+              router.push('/agent-tasks?filter=unsuccessful' as Href)
+            }
             icon="×"
             tone="red"
           />
           <MetricCard
             label="Parciales"
             value={dashboard.partials}
+            onPress={() => router.push('/agent-tasks?filter=partials' as Href)}
             icon="½"
             tone="amber"
           />
@@ -337,12 +344,14 @@ function MetricCard({
   icon,
   tone,
   suffix = '',
+  onPress,
 }: {
   label: string;
   value: number;
   icon: string;
   tone: 'blue' | 'amber' | 'green' | 'red' | 'purple';
   suffix?: string;
+  onPress?: () => void;
 }) {
   const toneStyle = {
     blue: {
@@ -367,8 +376,8 @@ function MetricCard({
     },
   }[tone];
 
-  return (
-    <View style={styles.metricCard}>
+  const content = (
+    <>
       <View style={[styles.metricIconWrap, toneStyle.icon]}>
         <Text style={styles.metricIcon}>{icon}</Text>
       </View>
@@ -377,6 +386,20 @@ function MetricCard({
       <Text numberOfLines={1} style={styles.metricLabel}>
         {label}
       </Text>
+    </>
+  );
+
+  if (onPress) {
+    return (
+      <Pressable style={styles.metricCard} onPress={onPress}>
+        {content}
+      </Pressable>
+    );
+  }
+
+  return (
+    <View style={styles.metricCard}>
+      {content}
     </View>
   );
 }

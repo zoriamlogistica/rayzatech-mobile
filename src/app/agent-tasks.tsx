@@ -9,10 +9,16 @@ import {
   type TaskListItem,
 } from '@/application/tasks/taskQuery.service';
 import { AgentScreen } from '@/components/agent-screen';
+import { listTaskManagementsByTask } from '@/infrastructure/db/repositories/taskManagementRepository';
 import { getDisplayZone } from '@/shared/zones';
 import { runDevSyncSimulation } from '@/sync/syncEngine';
 import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect, type Href } from 'expo-router';
+import {
+  router,
+  useFocusEffect,
+  useLocalSearchParams,
+  type Href,
+} from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
@@ -24,7 +30,13 @@ import {
   View,
 } from 'react-native';
 
-type TaskFilter = 'pending' | 'in_progress' | 'completed' | 'all';
+type TaskFilter =
+  | 'pending'
+  | 'in_progress'
+  | 'completed'
+  | 'unsuccessful'
+  | 'partials'
+  | 'all';
 
 type CompletedGroupKey = 'completed' | 'unsuccessful' | 'rescheduled';
 
@@ -34,9 +46,15 @@ type CompletedGroup = {
   tasks: TaskListItem[];
 };
 
+type RouteGroup = {
+  routeNumber: string;
+  tasks: TaskListItem[];
+};
+
 export default function AgentTasksScreen() {
+  const params = useLocalSearchParams<{ filter?: string }>();
   const [tasks, setTasks] = useState<TaskListItem[]>([]);
-  const [completedGroups, setCompletedGroups] = useState<CompletedGroup[]>([]);
+  const [completedGroups] = useState<CompletedGroup[]>([]);
   const [expandedGroups, setExpandedGroups] = useState<
     Record<CompletedGroupKey, boolean>
   >({
@@ -44,9 +62,15 @@ export default function AgentTasksScreen() {
     unsuccessful: false,
     rescheduled: false,
   });
-
   const [isLoading, setIsLoading] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<TaskFilter>('pending');
+  const initialFilter =
+    params.filter === 'unsuccessful' ||
+    params.filter === 'partials' ||
+    params.filter === 'completed' ||
+    params.filter === 'all'
+      ? (params.filter as TaskFilter)
+      : 'pending';
+  const [activeFilter, setActiveFilter] = useState<TaskFilter>(initialFilter);
   const selectedOperation = getSelectedFieldOperation() ?? 'inverse';
   const [searchText, setSearchText] = useState('');
   const [pendingLiquidationCount, setPendingLiquidationCount] = useState(0);
@@ -66,24 +90,43 @@ export default function AgentTasksScreen() {
     Alert.alert(fieldError.title, fieldError.message);
   }
 
-  function buildCompletedGroups(allTasks: TaskListItem[]): CompletedGroup[] {
-    return [
-      {
-        key: 'completed',
-        title: 'Exitosas / Completadas',
-        tasks: allTasks.filter((task) => task.status === 'completed'),
-      },
-      {
-        key: 'unsuccessful',
-        title: 'No exitosas',
-        tasks: allTasks.filter((task) => task.status === 'unsuccessful'),
-      },
-      {
-        key: 'rescheduled',
-        title: 'Reprogramadas',
-        tasks: allTasks.filter((task) => task.status === 'rescheduled'),
-      },
-    ];
+  async function filterPartialTasks(
+    allTasks: TaskListItem[]
+  ): Promise<TaskListItem[]> {
+    const checks = await Promise.all(
+      allTasks.map(async (task) => {
+        const managements = await listTaskManagementsByTask(task.id);
+        const latestManagement = managements[0];
+        const partialText = [
+          latestManagement?.reason,
+          latestManagement?.observation,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+
+        return partialText.includes('parcial') ? task : null;
+      })
+    );
+
+    return checks.filter((task): task is TaskListItem => task !== null);
+  }
+
+  function buildRouteGroups(allTasks: TaskListItem[]): RouteGroup[] {
+    const groups = new Map<string, TaskListItem[]>();
+
+    for (const task of allTasks) {
+      const routeNumber = task.routeNumber?.trim() || 'Sin ruta';
+      const routeTasks = groups.get(routeNumber) ?? [];
+
+      routeTasks.push(task);
+      groups.set(routeNumber, routeTasks);
+    }
+
+    return [...groups.entries()].map(([routeNumber, routeTasks]) => ({
+      routeNumber,
+      tasks: routeTasks,
+    }));
   }
 
   const loadTasks = useCallback(
@@ -105,26 +148,18 @@ export default function AgentTasksScreen() {
           allVisibleTasks.filter((task) => task.hasPendingLiquidation).length
         );
 
-        if (filter === 'completed') {
-          const result = await listCachedTasks({
-            search: trimmedSearch || undefined,
-            fieldOperationType: operation,
-          });
-
-          setCompletedGroups(buildCompletedGroups(result));
-          setTasks([]);
-          setActiveFilter(filter);
-          return;
-        }
-
-        const result = await listCachedTasks({
-          status: filter === 'all' ? undefined : filter,
+        const baseResult = await listCachedTasks({
+          status:
+            filter === 'all' || filter === 'partials' ? undefined : filter,
           search: trimmedSearch || undefined,
           fieldOperationType: operation,
         });
+        const result =
+          filter === 'partials'
+            ? await filterPartialTasks(baseResult)
+            : baseResult;
 
         setTasks(result);
-        setCompletedGroups([]);
         setActiveFilter(filter);
       } catch (error) {
         await handleError(error);
@@ -293,10 +328,7 @@ async function openMap(task: TaskListItem) {
     }));
   }
 
-  const totalCompletedGrouped = completedGroups.reduce(
-    (total, group) => total + group.tasks.length,
-    0
-  );
+  const routeGroups = buildRouteGroups(tasks);
 
   return (
     <AgentScreen
@@ -328,6 +360,16 @@ async function openMap(task: TaskListItem) {
           active={activeFilter === 'in_progress'}
           onPress={() => loadTasks('in_progress', searchText, selectedOperation)}
         />
+        <FilterChip
+          label="No exitosas"
+          active={activeFilter === 'unsuccessful'}
+          onPress={() => loadTasks('unsuccessful', searchText, selectedOperation)}
+        />
+        <FilterChip
+          label="Parciales"
+          active={activeFilter === 'partials'}
+          onPress={() => loadTasks('partials', searchText, selectedOperation)}
+        />
       </View>
 
       {pendingLiquidationCount > 0 ? (
@@ -347,11 +389,11 @@ async function openMap(task: TaskListItem) {
       <View style={styles.summaryBox}>
         <Text style={styles.summaryText}>
           Filtro: {getFilterLabel(activeFilter)} | Total mostrado:{' '}
-          {activeFilter === 'completed' ? totalCompletedGrouped : tasks.length}
+          {tasks.length}
         </Text>
       </View>
 
-      {activeFilter === 'completed' ? (
+      {activeFilter === 'completed' && completedGroups.length > 0 ? (
         <View style={styles.groupList}>
           {completedGroups.map((group) => {
             const isExpanded = expandedGroups[group.key];
@@ -408,17 +450,30 @@ async function openMap(task: TaskListItem) {
               </Text>
             </View>
           ) : (
-            tasks.map((task) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                getStatusLabel={getStatusLabel}
-                getPriorityLabel={getPriorityLabel}
-                onCall={() => callCustomer(task.customerPhone)}
-                onMessage={() => messageCustomer(task.customerPhone)}
-                onMap={() => openMap(task)}
-                onOpen={() => openTask(task.id)}
-              />
+            routeGroups.map((group) => (
+              <View key={group.routeNumber} style={styles.routeGroupCard}>
+                <View style={styles.routeGroupHeader}>
+                  <Text style={styles.routeGroupTitle}>
+                    Ruta {group.routeNumber}
+                  </Text>
+                  <Text style={styles.routeGroupCount}>
+                    {group.tasks.length}
+                  </Text>
+                </View>
+
+                {group.tasks.map((task) => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    getStatusLabel={getStatusLabel}
+                    getPriorityLabel={getPriorityLabel}
+                    onCall={() => callCustomer(task.customerPhone)}
+                    onMessage={() => messageCustomer(task.customerPhone)}
+                    onMap={() => openMap(task)}
+                    onOpen={() => openTask(task.id)}
+                  />
+                ))}
+              </View>
             ))
           )}
         </View>
@@ -461,6 +516,14 @@ function getFilterLabel(filter: TaskFilter): string {
 
   if (filter === 'completed') {
     return 'Completadas';
+  }
+
+  if (filter === 'unsuccessful') {
+    return 'No exitosas';
+  }
+
+  if (filter === 'partials') {
+    return 'Parciales';
   }
 
   return 'Todas';
@@ -673,6 +736,36 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     gap: 12,
+  },
+  routeGroupCard: {
+    gap: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#DDE3EA',
+    borderRadius: 14,
+    backgroundColor: '#F8FAFC',
+  },
+  routeGroupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  routeGroupTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#061A44',
+  },
+  routeGroupCount: {
+    minWidth: 28,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    overflow: 'hidden',
+    backgroundColor: '#137333',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '900',
   },
   groupList: {
     gap: 12,

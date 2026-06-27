@@ -379,7 +379,7 @@ export async function getAgentTaskSummary(filter?: {
       .includes('parcial')
   ).length;
 
-  const effectiveTasks = byStatus.completed + partialTasks;
+  const effectiveTasks = byStatus.completed;
   const effectivenessGeneral =
     visibleTasks.length > 0
       ? Math.round((effectiveTasks / visibleTasks.length) * 100)

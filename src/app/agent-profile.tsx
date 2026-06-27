@@ -16,6 +16,7 @@ import { classifyFieldError } from '@/application/errors/fieldError.service';
 import { appLogger } from '@/application/logging/appLogger.service';
 import { getCurrentLocalUserProfile } from '@/application/profile/userProfile.service';
 import { downloadDevTasksToLocalCache } from '@/application/tasks/taskDownload.service';
+import { getSelectedFieldOperation } from '@/application/tasks/operationSelection.service';
 
 import { AgentScreen } from '@/components/agent-screen';
 import { runDevSyncSimulation } from '@/sync/syncEngine';
@@ -141,6 +142,8 @@ export default function AgentProfileScreen() {
   const [isPeriodModalOpen, setIsPeriodModalOpen] = useState(false);
   const [profile, setProfile] = useState<ProfileState>(emptyProfileState());
   const [isLoading, setIsLoading] = useState(false);
+  const selectedOperation = getSelectedFieldOperation() ?? 'inverse';
+  const isLastMile = selectedOperation === 'last_mile';
 
   const selectedPeriodLabel =
     periods.find((period) => period.value === selectedPeriod)?.label ?? '-';
@@ -167,14 +170,14 @@ export default function AgentProfileScreen() {
 
         const localProfile = await getCurrentLocalUserProfile();
 
-if (!localProfile.session?.accessToken) {
+if (!localProfile.session?.accessToken && !isLastMile) {
   throw new Error('No hay token activo para consultar el resumen operativo.');
 }
 
-const remoteSummary = await fetchRemoteProfileSummary(
-  localProfile.session.accessToken,
-  period
-);
+const remoteSummary =
+  !isLastMile && localProfile.session?.accessToken
+    ? await fetchRemoteProfileSummary(localProfile.session.accessToken, period)
+    : null;
 
         setProfile({
           fullName: localProfile.fullName,
@@ -183,12 +186,12 @@ const remoteSummary = await fetchRemoteProfileSummary(
 address: localProfile.user?.address ?? '-',
 zone: localProfile.user?.zone ?? '-',
 
-          totalTasks: remoteSummary.totalTasks,
-pendingTasks: remoteSummary.pendingTasks,
-completedTasks: remoteSummary.completedTasks,
-unsuccessfulTasks: remoteSummary.unsuccessfulTasks,
-rescheduledTasks: remoteSummary.rescheduledTasks,
-recoveredDevices: remoteSummary.recoveredDevices,
+          totalTasks: remoteSummary?.totalTasks ?? 0,
+pendingTasks: remoteSummary?.pendingTasks ?? 0,
+completedTasks: remoteSummary?.completedTasks ?? 0,
+unsuccessfulTasks: remoteSummary?.unsuccessfulTasks ?? 0,
+rescheduledTasks: remoteSummary?.rescheduledTasks ?? 0,
+recoveredDevices: remoteSummary?.recoveredDevices ?? 0,
 
           loadedAt: new Date().toISOString(),
         });
@@ -198,7 +201,7 @@ recoveredDevices: remoteSummary.recoveredDevices,
         setIsLoading(false);
       }
     },
-    [selectedPeriod]
+    [selectedPeriod, isLastMile]
   );
 
   useEffect(() => {
@@ -267,6 +270,7 @@ recoveredDevices: remoteSummary.recoveredDevices,
         <InfoRow label="Zona" value={profile.zone} />
       </View>
 
+      {!isLastMile ? (
       <View style={styles.card}>
         <View style={styles.cardHeaderRow}>
           <Text style={styles.cardTitle}>Resumen operativo</Text>
@@ -320,6 +324,7 @@ recoveredDevices: remoteSummary.recoveredDevices,
           />
         </View>
       </View>
+      ) : null}
 
       <View style={styles.actions}>
         <Button title="Cerrar sesión" onPress={logoutLocalDev} />

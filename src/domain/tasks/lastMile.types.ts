@@ -6,10 +6,6 @@ export const LAST_MILE_DELIVERY_RESULTS = {
       'Pedido contra entrega pagado con POS/TRANS/YAPE/EFECTIVO',
       'Entregado en agencia',
       'Entrega parcial',
-      'Items faltantes, indicar en guia',
-      'Soporte autoriza',
-      'Entrega complementaria correspondiente a guia entregada anteriormente',
-      'Cliente rechaza parte de la mercaderia',
     ],
   },
   not_delivered: {
@@ -46,8 +42,13 @@ export const LAST_MILE_PICKUP_RESULTS = {
 
 export const MERCHANDISE_CONDITIONS = [
   'Entrega conforme',
-  'Item faltantes',
-  'Item sobrantes',
+  'Items sobrantes',
+] as const;
+
+export const PARTIAL_DELIVERY_MERCHANDISE_CONDITIONS = [
+  'Items faltantes',
+  'Cliente rechaza parte de la mercaderia',
+  'Entrega complementaria correspondiente a guia entregada anteriormente',
 ] as const;
 
 export const LAST_MILE_EVIDENCE_RULES = {
