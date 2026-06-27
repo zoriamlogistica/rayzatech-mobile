@@ -11,6 +11,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { classifyFieldError } from '@/application/errors/fieldError.service';
+import { logoutLocalSession } from '@/application/auth/authSession.service';
+import { downloadDevTasksToLocalCache } from '@/application/tasks/taskDownload.service';
 import {
   getAgentOperationAvailability,
   type AgentOperationAvailability,
@@ -19,6 +21,7 @@ import {
   setSelectedFieldOperation,
   type FieldOperationSelection,
 } from '@/application/tasks/operationSelection.service';
+import { runDevSyncSimulation } from '@/sync/syncEngine';
 
 export default function AgentOperationSelectScreen() {
   const [availability, setAvailability] = useState<AgentOperationAvailability>({
@@ -27,6 +30,7 @@ export default function AgentOperationSelectScreen() {
   });
   const [selected, setSelected] = useState<FieldOperationSelection | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const loadAvailability = useCallback(async () => {
     try {
@@ -74,6 +78,60 @@ export default function AgentOperationSelectScreen() {
     router.replace('/agent-dashboard' as Href);
   }
 
+  async function syncTasks() {
+    try {
+      setIsSyncing(true);
+
+      const downloadResult = await downloadDevTasksToLocalCache();
+      const syncResult = await runDevSyncSimulation({
+        limit: 100,
+        forceFail: false,
+      });
+
+      await loadAvailability();
+
+      Alert.alert(
+        'Sincronizacion finalizada',
+        `Tareas recibidas: ${downloadResult.remoteTasksReceived}.\n` +
+          `Insertadas: ${downloadResult.inserted}.\n` +
+          `Actualizadas: ${downloadResult.updated}.\n` +
+          `Sincronizadas: ${syncResult.success}.\n` +
+          `Pendientes: ${syncResult.remainingPending}.`
+      );
+    } catch (error) {
+      const fieldError = classifyFieldError(error);
+      Alert.alert(fieldError.title, fieldError.message);
+    } finally {
+      setIsSyncing(false);
+    }
+  }
+
+  function confirmLogout() {
+    Alert.alert(
+      'Cerrar sesion',
+      'Se cerrara la sesion local de este usuario.',
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+        {
+          text: 'Cerrar sesion',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await logoutLocalSession();
+              router.replace('/login' as Href);
+            } catch (error) {
+              const fieldError = classifyFieldError(error);
+              Alert.alert(fieldError.title, fieldError.message);
+            }
+          },
+        },
+      ]
+    );
+  }
+
   const hasAnyTasks = availability.inverse > 0 || availability.lastMile > 0;
 
   return (
@@ -85,6 +143,21 @@ export default function AgentOperationSelectScreen() {
           Solo se habilitan las opciones donde tienes tareas cargadas para hoy o
           pendientes de liquidacion.
         </Text>
+
+        <Pressable
+          disabled={isSyncing || isLoading}
+          style={[
+            styles.syncButton,
+            isSyncing || isLoading ? styles.syncButtonDisabled : null,
+          ]}
+          onPress={syncTasks}
+        >
+          {isSyncing ? (
+            <ActivityIndicator color="#137333" />
+          ) : (
+            <Text style={styles.syncButtonText}>Sincronizar tareas</Text>
+          )}
+        </Pressable>
 
         {isLoading ? (
           <View style={styles.loadingBox}>
@@ -131,6 +204,10 @@ export default function AgentOperationSelectScreen() {
           onPress={continueToDashboard}
         >
           <Text style={styles.primaryButtonText}>Continuar</Text>
+        </Pressable>
+
+        <Pressable style={styles.logoutButton} onPress={confirmLogout}>
+          <Text style={styles.logoutButtonText}>Cerrar sesion</Text>
         </Pressable>
       </View>
     </SafeAreaView>
@@ -210,6 +287,23 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     color: '#5C6675',
     textAlign: 'center',
+  },
+  syncButton: {
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#BFE6CE',
+    borderRadius: 15,
+    backgroundColor: '#F2FBF6',
+  },
+  syncButtonDisabled: {
+    opacity: 0.65,
+  },
+  syncButtonText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#137333',
   },
   loadingBox: {
     alignItems: 'center',
@@ -306,5 +400,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '900',
     color: '#FFFFFF',
+  },
+  logoutButton: {
+    minHeight: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+    backgroundColor: '#EEEEEE',
+  },
+  logoutButtonText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#333333',
   },
 });
