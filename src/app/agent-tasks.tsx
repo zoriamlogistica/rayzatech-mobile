@@ -19,7 +19,7 @@ import {
   useLocalSearchParams,
   type Href,
 } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   Alert,
   Linking,
@@ -143,10 +143,6 @@ export default function AgentTasksScreen() {
     [activeFilter, searchText, selectedOperation]
   );
 
-  useEffect(() => {
-    loadTasks(initialFilter, '');
-  }, [loadTasks, initialFilter]);
-
   useFocusEffect(
     useCallback(() => {
       loadTasks(activeFilter, searchText);
@@ -157,11 +153,12 @@ export default function AgentTasksScreen() {
     try {
       setIsLoading(true);
 
-      const downloadResult = await downloadDevTasksToLocalCache();
       const syncResult = await runDevSyncSimulation({
         limit: 100,
         forceFail: false,
       });
+
+      const downloadResult = await downloadDevTasksToLocalCache();
 
       await loadTasks(activeFilter, searchText, selectedOperation);
 

@@ -164,7 +164,10 @@ function matchesSearch(task: Task, search?: string): boolean {
   return searchableText.includes(normalizedSearch);
 }
 
-function mapTaskToListItem(task: Task): TaskListItem {
+function mapTaskToListItem(
+  task: Task,
+  effectiveStatus: Task['status'] = task.status
+): TaskListItem {
   return {
     id: task.id,
     remoteId: task.remoteId,
@@ -197,7 +200,7 @@ function mapTaskToListItem(task: Task): TaskListItem {
     timeRange: task.timeRange,
     taskType: task.taskType,
     priority: task.priority,
-    status: task.status,
+    status: effectiveStatus,
     syncStatus: task.syncStatus,
     isDirty: task.isDirty,
     isLocked: task.isLocked,
@@ -212,12 +215,8 @@ export async function listCachedTasks(
   const activeSession = await getActiveLocalSession();
   const activeAgentId = activeSession?.agentId ?? activeSession?.userId;
 
-  return tasks
-    .filter((task) => {
+  const visibleTasks = tasks.filter((task) => {
       if (activeAgentId && task.assignedUserId && task.assignedUserId !== activeAgentId) {
-        return false;
-      }
-      if (filter?.status && task.status !== filter.status) {
         return false;
       }
 
@@ -239,8 +238,26 @@ export async function listCachedTasks(
       }
 
       return true;
+    });
+
+  const enrichedTasks = await Promise.all(
+    visibleTasks.map(async (task) => {
+      const managements = await listTaskManagementsByTask(task.id);
+
+      return {
+        task,
+        effectiveStatus: getEffectiveTaskStatus(task, managements[0] ?? null),
+      };
     })
-    .map(mapTaskToListItem);
+  );
+
+  return enrichedTasks
+    .filter(({ effectiveStatus }) =>
+      filter?.status ? effectiveStatus === filter.status : true
+    )
+    .map(({ task, effectiveStatus }) =>
+      mapTaskToListItem(task, effectiveStatus)
+    );
 }
 
 export async function listTodayCachedTasks(): Promise<TaskListItem[]> {
@@ -275,6 +292,12 @@ const series = await listTaskSeries(taskId);
 const recoveredDevices = await listRecoveredDevicesByTask(taskId);
 const evidences = await listEvidencesByTask(taskId);
 const managements = await listTaskManagementsByTask(taskId);
+const effectiveTask = task
+  ? {
+      ...task,
+      status: getEffectiveTaskStatus(task, managements[0] ?? null),
+    }
+  : null;
 
 const managementHistory = await Promise.all(
   managements.map(async (management) => {
@@ -309,7 +332,7 @@ const gpsCounters = await countGpsPointsByTask(taskId);
 const evidenceCounters = await countEvidencesByTask(taskId);
 
   return {
-    task,
+    task: effectiveTask,
     series,
     recoveredDevices,
     evidences,
@@ -354,18 +377,6 @@ export async function getAgentTaskSummary(filter?: {
     return true;
   });
 
-  const byStatus = {
-    pending: visibleTasks.filter((task) => task.status === 'pending').length,
-    inProgress: visibleTasks.filter((task) => task.status === 'in_progress')
-      .length,
-    completed: visibleTasks.filter((task) => task.status === 'completed').length,
-    unsuccessful: visibleTasks.filter((task) => task.status === 'unsuccessful')
-      .length,
-    rescheduled: visibleTasks.filter((task) => task.status === 'rescheduled')
-      .length,
-    cancelled: visibleTasks.filter((task) => task.status === 'cancelled').length,
-  };
-
   const pendingLiquidationTasks = visibleTasks.filter(
     (task) => task.hasPendingLiquidation
   ).length;
@@ -376,6 +387,24 @@ export async function getAgentTaskSummary(filter?: {
       return managements[0] ?? null;
     })
   );
+
+  const effectiveStatuses = visibleTasks.map((task, index) =>
+    getEffectiveTaskStatus(task, latestManagements[index])
+  );
+
+  const byStatus = {
+    pending: effectiveStatuses.filter((status) => status === 'pending').length,
+    inProgress: effectiveStatuses.filter((status) => status === 'in_progress')
+      .length,
+    completed: effectiveStatuses.filter((status) => status === 'completed')
+      .length,
+    unsuccessful: effectiveStatuses.filter((status) => status === 'unsuccessful')
+      .length,
+    rescheduled: effectiveStatuses.filter((status) => status === 'rescheduled')
+      .length,
+    cancelled: effectiveStatuses.filter((status) => status === 'cancelled')
+      .length,
+  };
 
   const partialTasks = latestManagements.filter((management) =>
     [
@@ -408,6 +437,29 @@ export async function getAgentTaskSummary(filter?: {
       .length,
     lockedTasks: visibleTasks.filter((task) => task.isLocked).length,
   };
+}
+
+function getEffectiveTaskStatus(
+  task: Task,
+  latestManagement?: Awaited<ReturnType<typeof listTaskManagementsByTask>>[number] | null
+): Task['status'] {
+  if (!latestManagement) {
+    return task.status;
+  }
+
+  if (latestManagement.resultStatus === 'successful') {
+    return 'completed';
+  }
+
+  if (latestManagement.resultStatus === 'unsuccessful') {
+    return 'unsuccessful';
+  }
+
+  if (latestManagement.resultStatus === 'rescheduled') {
+    return 'rescheduled';
+  }
+
+  return task.status;
 }
 
 export async function getAgentOperationAvailability(): Promise<AgentOperationAvailability> {

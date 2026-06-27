@@ -148,12 +148,12 @@ effectivenessGeneral: summary.effectivenessGeneral,
     try {
       setIsLoading(true);
 
-      const downloadResult = await downloadDevTasksToLocalCache();
-
       const syncResult = await runDevSyncSimulation({
         limit: 100,
         forceFail: false,
       });
+
+      const downloadResult = await downloadDevTasksToLocalCache();
 
       await loadDashboard();
 

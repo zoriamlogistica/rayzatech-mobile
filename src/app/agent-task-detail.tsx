@@ -571,12 +571,12 @@ const [lastMileFacadePhotos, setLastMileFacadePhotos] = useState<
   try {
     setIsLoading(true);
 
-    const downloadResult = await downloadDevTasksToLocalCache();
-
     const syncResult = await runDevSyncSimulation({
       limit: 100,
       forceFail: false,
     });
+
+    const downloadResult = await downloadDevTasksToLocalCache();
 
     await loadDetail();
 
@@ -1861,7 +1861,11 @@ async function openCustomerMap() {
   <View style={styles.evidenceBox}>
     <Text style={styles.evidenceText}>Evidencia registrada</Text>
 
-    <View style={styles.evidencePreviewRow}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator
+      contentContainerStyle={styles.evidencePreviewRow}
+    >
       {historyPhotos.map((photo, index) => (
         <View key={photo.id} style={styles.deviceThumbnailBox}>
           <PhotoThumbnail
@@ -1875,7 +1879,7 @@ async function openCustomerMap() {
           </Text>
         </View>
       ))}
-    </View>
+    </ScrollView>
   </View>
 ) : null}
 
