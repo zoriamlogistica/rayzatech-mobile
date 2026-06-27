@@ -11,17 +11,17 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { classifyFieldError } from '@/application/errors/fieldError.service';
-import { logoutLocalSession } from '@/application/auth/authSession.service';
+import { hardClearLocalAuth } from '@/application/auth/authSession.service';
 import { downloadDevTasksToLocalCache } from '@/application/tasks/taskDownload.service';
 import {
   getAgentOperationAvailability,
   type AgentOperationAvailability,
 } from '@/application/tasks/taskQuery.service';
 import {
+  clearSelectedFieldOperation,
   setSelectedFieldOperation,
   type FieldOperationSelection,
 } from '@/application/tasks/operationSelection.service';
-import { runDevSyncSimulation } from '@/sync/syncEngine';
 
 export default function AgentOperationSelectScreen() {
   const [availability, setAvailability] = useState<AgentOperationAvailability>({
@@ -83,24 +83,23 @@ export default function AgentOperationSelectScreen() {
       setIsSyncing(true);
 
       const downloadResult = await downloadDevTasksToLocalCache();
-      const syncResult = await runDevSyncSimulation({
-        limit: 100,
-        forceFail: false,
-      });
 
       await loadAvailability();
 
       Alert.alert(
-        'Sincronizacion finalizada',
+        'Tareas actualizadas',
         `Tareas recibidas: ${downloadResult.remoteTasksReceived}.\n` +
           `Insertadas: ${downloadResult.inserted}.\n` +
-          `Actualizadas: ${downloadResult.updated}.\n` +
-          `Sincronizadas: ${syncResult.success}.\n` +
-          `Pendientes: ${syncResult.remainingPending}.`
+          `Actualizadas: ${downloadResult.updated}.`
       );
     } catch (error) {
       const fieldError = classifyFieldError(error);
-      Alert.alert(fieldError.title, fieldError.message);
+      const detail = error instanceof Error ? error.message : String(error);
+
+      Alert.alert(
+        fieldError.title,
+        `${fieldError.message}\n\nDetalle: ${detail}`
+      );
     } finally {
       setIsSyncing(false);
     }
@@ -120,7 +119,8 @@ export default function AgentOperationSelectScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await logoutLocalSession();
+              clearSelectedFieldOperation();
+              await hardClearLocalAuth();
               router.replace('/login' as Href);
             } catch (error) {
               const fieldError = classifyFieldError(error);

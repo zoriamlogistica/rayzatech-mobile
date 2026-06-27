@@ -1,5 +1,6 @@
 // src/app/login.tsx
 
+import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import {
     ActivityIndicator,
@@ -48,6 +49,7 @@ export default function LoginScreen() {
       });
 
       await refreshAfterLogin();
+      router.replace('/agent-operation-select' as Href);
     } catch (error) {
       const fieldError = classifyFieldError(error);
 

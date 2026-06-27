@@ -135,13 +135,9 @@ export default function RootLayout() {
   }
 
   if (bootstrapResult.status === 'ready') {
-    if (pathname === '/login') {
-      router.replace('/agent-operation-select' as never);
-      return;
-    }
-
     if (
       !getSelectedFieldOperation() &&
+      pathname !== '/login' &&
       pathname !== '/agent-operation-select'
     ) {
       router.replace('/agent-operation-select' as never);

@@ -153,6 +153,8 @@ export async function runMigrations(db: SQLiteDatabase): Promise<void> {
       throw error;
     }
   }
+
+  await applyLastMileTaskFieldsMigration(db);
 }
 
 export async function getCurrentSchemaVersion(
