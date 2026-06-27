@@ -12,6 +12,7 @@ import {
   markSyncItemAsSyncing,
   releaseWaitingRetrySyncItems,
 } from '@/infrastructure/db/repositories/syncQueueRepository';
+import { listRecentTaskManagements } from '@/infrastructure/db/repositories/taskManagementRepository';
 import { syncEvidenceToRemote } from '@/infrastructure/remote/mobileEvidenceSync';
 import { syncRecoveredDeviceToRemote } from '@/infrastructure/remote/mobileRecoveredDeviceSync';
 import { syncTaskManagementToRemote } from '@/infrastructure/remote/mobileTaskManagementSync';
@@ -90,11 +91,46 @@ async function syncOneItem(item: SyncQueueItem): Promise<void> {
   throw new Error(`UNSUPPORTED_SYNC_ENTITY_TYPE:${item.entityType}`);
 }
 
+async function repairRecentManagementSync(limit = 50): Promise<number> {
+  const recentManagements = await listRecentTaskManagements(limit);
+  let repaired = 0;
+
+  for (const management of recentManagements) {
+    try {
+      await syncTaskManagementToRemote(management.id);
+      repaired += 1;
+    } catch (error) {
+      await appLogger.warn({
+        scope: 'SYNC_ENGINE',
+        message: 'Recent management repair sync failed.',
+        payload: {
+          managementId: management.id,
+          error: getErrorMessage(error),
+        },
+      });
+    }
+  }
+
+  return repaired;
+}
+
 export async function runDevSyncSimulation(params?: {
   limit?: number;
   forceFail?: boolean;
 }): Promise<SyncEngineResult> {
   if (isSyncRunning) {
+    const repairedManagements = await repairRecentManagementSync(50);
+
+    if (repairedManagements > 0) {
+      await appLogger.info({
+        scope: 'SYNC_ENGINE',
+        message: 'Recent management repair sync finished.',
+        payload: {
+          repairedManagements,
+        },
+      });
+    }
+
     const remainingPending = await countPendingSyncItems();
 
     await appLogger.warn({

@@ -28,6 +28,7 @@ import {
   createSuccessfulManagementOffline,
   createUnsuccessfulManagementOffline,
 } from '@/application/tasks/taskManagement.service';
+import { markTaskPendingLiquidation } from '@/infrastructure/db/repositories/taskRepository';
 import {
   getTaskDetailSnapshot,
   type TaskDetailSnapshot,
@@ -279,7 +280,7 @@ function formatDateTime(value?: string): string {
 function getTaskStatusLabel(status?: string): string {
   if (status === 'pending') return 'Pendiente';
   if (status === 'in_progress') return 'En progreso';
-  if (status === 'completed') return 'Completada';
+  if (status === 'completed') return 'Exitosa';
   if (status === 'unsuccessful') return 'No exitosa';
   if (status === 'rescheduled') return 'Reprogramada';
   if (status === 'cancelled') return 'Cancelada';
@@ -301,6 +302,14 @@ function isLastMilePickup(
   task?: { lastMileTaskType?: string; taskType?: string } | null
 ) {
   return task?.lastMileTaskType === 'pickup' || task?.taskType === 'last_mile_pickup';
+}
+
+function normalizeForCompare(value?: string | null): string {
+  return (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
 }
 
 function getLastMileTaskLabel(task?: {
@@ -1463,6 +1472,10 @@ async function openCustomerMap() {
       lastMileResultKey === 'not_delivered' ||
       lastMileResultKey === 'not_picked_up';
     const evidenceId = isUnsuccessful ? houseFrontEvidenceId : generalEvidenceId;
+    const requiresLiquidation =
+      !isUnsuccessful &&
+      (isLastMilePickup(snapshot.task) ||
+        normalizeForCompare(lastMileMerchandiseCondition) === 'items sobrantes');
 
     if (!lastMileSubstate) {
       Alert.alert('Subestado requerido', 'Selecciona el subestado de la gestion.');
@@ -1523,6 +1536,10 @@ async function openCustomerMap() {
           generalEvidenceId: evidenceId,
           managedBy: 'dev_agent_001',
         });
+      }
+
+      if (requiresLiquidation) {
+        await markTaskPendingLiquidation(taskId);
       }
 
       setIsManagementModalOpen(false);

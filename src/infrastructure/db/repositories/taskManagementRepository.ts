@@ -221,6 +221,24 @@ export async function listTaskManagementsByTask(
   return rows.map(mapRowToTaskManagement);
 }
 
+export async function listRecentTaskManagements(
+  limit = 50
+): Promise<TaskManagement[]> {
+  const db = await getDatabase();
+
+  const rows = await db.getAllAsync<TaskManagementRow>(
+    `
+      SELECT *
+      FROM task_managements
+      ORDER BY managed_at DESC, management_number DESC
+      LIMIT ?;
+    `,
+    [limit]
+  );
+
+  return rows.map(mapRowToTaskManagement);
+}
+
 export async function countTaskManagementsByTask(
   taskId: string
 ): Promise<TaskManagementCounters> {

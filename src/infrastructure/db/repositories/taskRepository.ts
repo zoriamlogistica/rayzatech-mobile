@@ -398,6 +398,25 @@ export async function updateTaskStatus(params: {
   );
 }
 
+export async function markTaskPendingLiquidation(taskId: string): Promise<void> {
+  const db = await getDatabase();
+  const now = nowIso();
+
+  await db.runAsync(
+    `
+      UPDATE tasks
+      SET
+        has_pending_liquidation = 1,
+        liquidation_status = 'pending',
+        local_updated_at = ?,
+        updated_at = ?
+      WHERE id = ?
+        AND deleted_at IS NULL;
+    `,
+    [now, now, taskId]
+  );
+}
+
 export async function markTaskAsSynced(params: {
   taskId: string;
   remoteId?: string;

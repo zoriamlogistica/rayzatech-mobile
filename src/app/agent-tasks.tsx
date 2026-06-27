@@ -361,7 +361,7 @@ export default function AgentTasksScreen() {
 }
 
 function getStatusLabel(status: TaskListItem['status'], isPartial: boolean) {
-  if (status === 'completed') return isPartial ? 'Parcial' : 'Exitosa';
+  if (status === 'completed') return 'Exitosa';
   if (status === 'unsuccessful') return 'No exitosa';
   if (status === 'rescheduled') return 'Reprogramada';
   if (status === 'in_progress') return 'En progreso';
