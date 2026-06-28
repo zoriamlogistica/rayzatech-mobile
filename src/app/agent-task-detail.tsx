@@ -94,6 +94,10 @@ type DeviceForm = {
 
 const MAX_DEVICES_PER_MANAGEMENT = 10;
 const MAX_LAST_MILE_EVIDENCE_PHOTOS = 10;
+const RETURN_TO_WAREHOUSE_CONDITIONS = [
+  'Cliente rechaza parte de la mercaderia, con retorno a almacen',
+  'A solicitud de soporte, con retorno a almacen',
+];
 const MAX_RECOMMENDED_EVIDENCE_SIZE_BYTES = 2 * 1024 * 1024;
 
 type EvidencePreview = {
@@ -1489,7 +1493,12 @@ async function openCustomerMap() {
     const requiresLiquidation =
       !isUnsuccessful &&
       (isLastMilePickup(snapshot.task) ||
-        normalizeForCompare(lastMileMerchandiseCondition) === 'items sobrantes');
+        normalizeForCompare(lastMileMerchandiseCondition) === 'items sobrantes' ||
+        RETURN_TO_WAREHOUSE_CONDITIONS.some(
+          (condition) =>
+            normalizeForCompare(condition) ===
+            normalizeForCompare(lastMileMerchandiseCondition)
+        ));
 
     if (!lastMileSubstate) {
       Alert.alert('Subestado requerido', 'Selecciona el subestado de la gestion.');

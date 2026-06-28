@@ -69,7 +69,11 @@ function buildLastMilePayload(
   const requiresLiquidation =
     !isLiquidation &&
     ((isPickup && management.resultStatus === 'successful') ||
-      normalizeForCompare(merchandiseCondition) === 'items sobrantes');
+      normalizeForCompare(merchandiseCondition) === 'items sobrantes' ||
+      normalizeForCompare(merchandiseCondition) ===
+        'cliente rechaza parte de la mercaderia, con retorno a almacen' ||
+      normalizeForCompare(merchandiseCondition) ===
+        'a solicitud de soporte, con retorno a almacen');
 
   return {
     lastMileResult,

@@ -47,8 +47,9 @@ export const MERCHANDISE_CONDITIONS = [
 
 export const PARTIAL_DELIVERY_MERCHANDISE_CONDITIONS = [
   'Items faltantes',
-  'Cliente rechaza parte de la mercaderia',
+  'Cliente rechaza parte de la mercaderia, con retorno a almacen',
   'Entrega complementaria correspondiente a guia entregada anteriormente',
+  'A solicitud de soporte, con retorno a almacen',
 ] as const;
 
 export const PICKUP_CONFORME_MERCHANDISE_CONDITIONS = [
