@@ -356,6 +356,40 @@ export async function markTaskManagementAsSynced(id: string): Promise<void> {
   );
 }
 
+export async function markUnsyncedTaskManagementsAsObsoleteForMissingRemoteTasks(
+  remoteIds: string[]
+): Promise<number> {
+  const db = await getDatabase();
+  const now = nowIso();
+
+  if (remoteIds.length === 0) {
+    return 0;
+  }
+
+  const placeholders = remoteIds.map(() => '?').join(', ');
+
+  const result = await db.runAsync(
+    `
+      UPDATE task_managements
+      SET
+        sync_status = 'conflict',
+        is_dirty = 0,
+        updated_at = ?,
+        local_updated_at = ?
+      WHERE remote_id IS NULL
+        AND task_id IN (
+          SELECT id
+          FROM tasks
+          WHERE remote_id IS NOT NULL
+            AND remote_id NOT IN (${placeholders})
+        );
+    `,
+    [now, now, ...remoteIds]
+  );
+
+  return result.changes ?? 0;
+}
+
 export async function deleteTaskManagement(id: string): Promise<void> {
   const db = await getDatabase();
 

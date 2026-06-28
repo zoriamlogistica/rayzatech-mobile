@@ -421,6 +421,45 @@ export async function listRecentSyncProblems(limit = 3): Promise<
   }));
 }
 
+export async function cancelTaskManagementSyncItemsForMissingRemoteTasks(
+  remoteIds: string[]
+): Promise<number> {
+  const db = await getDatabase();
+  const now = nowIso();
+
+  if (remoteIds.length === 0) {
+    return 0;
+  }
+
+  const placeholders = remoteIds.map(() => '?').join(', ');
+
+  const result = await db.runAsync(
+    `
+      UPDATE sync_queue
+      SET
+        status = 'cancelled',
+        locked_at = NULL,
+        locked_by = NULL,
+        last_error = 'LOCAL_OBSOLETE_TASK: Task was not included in the latest remote download.',
+        last_error_code = 'LOCAL_OBSOLETE_TASK',
+        updated_at = ?
+      WHERE entity_type = 'task_management'
+        AND status IN ('pending', 'failed', 'syncing', 'conflict')
+        AND entity_id IN (
+          SELECT tm.id
+          FROM task_managements tm
+          INNER JOIN tasks t ON t.id = tm.task_id
+          WHERE tm.remote_id IS NULL
+            AND t.remote_id IS NOT NULL
+            AND t.remote_id NOT IN (${placeholders})
+        );
+    `,
+    [now, ...remoteIds]
+  );
+
+  return result.changes ?? 0;
+}
+
 export async function clearSuccessfulSyncItems(): Promise<void> {
   const db = await getDatabase();
 

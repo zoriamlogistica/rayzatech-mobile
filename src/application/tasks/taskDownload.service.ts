@@ -11,6 +11,8 @@ import {
   updateTaskRemoteMasterData,
   upsertTask,
 } from '@/infrastructure/db/repositories/taskRepository';
+import { cancelTaskManagementSyncItemsForMissingRemoteTasks } from '@/infrastructure/db/repositories/syncQueueRepository';
+import { markUnsyncedTaskManagementsAsObsoleteForMissingRemoteTasks } from '@/infrastructure/db/repositories/taskManagementRepository';
 import { upsertTaskSeries } from '@/infrastructure/db/repositories/taskSeriesRepository';
 import { fetchMobileRemoteTasks } from '@/infrastructure/remote/mobileTaskSource';
 import type {
@@ -213,6 +215,8 @@ export type TaskDownloadResult = {
   updated: number;
   skippedDirty: number;
   conflictsRegistered: number;
+  obsoleteManagements: number;
+  obsoleteSyncItems: number;
   seriesDownloaded: number;
   taskIds: string[];
   details: TaskDownloadItemResult[];
@@ -231,6 +235,8 @@ const remoteIdsReceived = response.tasks
   let updated = 0;
   let skippedDirty = 0;
   let conflictsRegistered = 0;
+  let obsoleteManagements = 0;
+  let obsoleteSyncItems = 0;
   let seriesDownloaded = 0;
 
   const taskIds: string[] = [];
@@ -324,6 +330,13 @@ if (effectiveAction === 'update') {
   scheduledDate: todayLima,
   remoteIds: remoteIdsReceived,
 });
+
+obsoleteSyncItems =
+  await cancelTaskManagementSyncItemsForMissingRemoteTasks(remoteIdsReceived);
+obsoleteManagements =
+  await markUnsyncedTaskManagementsAsObsoleteForMissingRemoteTasks(
+    remoteIdsReceived
+  );
   
   return {
     downloadedAt: response.downloadedAt,
@@ -332,6 +345,8 @@ if (effectiveAction === 'update') {
     updated,
     skippedDirty,
     conflictsRegistered,
+    obsoleteManagements,
+    obsoleteSyncItems,
     seriesDownloaded,
     taskIds,
     details,

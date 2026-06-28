@@ -184,9 +184,10 @@ effectivenessGeneral: summary.effectivenessGeneral,
 
       Alert.alert(
         'Sincronización finalizada',
-        `Tareas recibidas: ${downloadResult.remoteTasksReceived}.\n` +
+          `Tareas recibidas: ${downloadResult.remoteTasksReceived}.\n` +
           `Insertadas: ${downloadResult.inserted}.\n` +
           `Actualizadas: ${downloadResult.updated}.\n` +
+          `Obsoletas limpiadas: ${downloadResult.obsoleteManagements}.\n` +
           `Sincronizadas: ${syncResult.success}.\n` +
           `Fallidas: ${syncResult.failed}.\n` +
           `Pendientes: ${syncResult.remainingPending}.` +
