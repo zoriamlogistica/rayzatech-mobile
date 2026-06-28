@@ -1,7 +1,7 @@
 // src/app/agent-task-detail.tsx
 
-import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { router, type Href, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Image,
@@ -499,6 +499,8 @@ export default function AgentTaskDetailScreen() {
 
   const [snapshot, setSnapshot] = useState<TaskDetailSnapshot | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSavingManagement, setIsSavingManagement] = useState(false);
+  const isSavingManagementRef = useRef(false);
 
   const [isManagementModalOpen, setIsManagementModalOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] =
@@ -1172,7 +1174,13 @@ async function captureDeviceLabelEvidencePhoto(deviceFormId: string) {
       return;
     }
 
+    if (isSavingManagementRef.current) {
+      return;
+    }
+
     try {
+      isSavingManagementRef.current = true;
+      setIsSavingManagement(true);
       setIsLoading(true);
 
       if (selectedStatus === 'successful') {
@@ -1297,6 +1305,8 @@ if (synced) {
     } catch (error) {
       await handleError(error);
     } finally {
+      isSavingManagementRef.current = false;
+      setIsSavingManagement(false);
       setIsLoading(false);
     }
   }
@@ -1464,6 +1474,10 @@ async function openCustomerMap() {
       return;
     }
 
+    if (isSavingManagementRef.current) {
+      return;
+    }
+
     const resultOptions = getLastMileResultOptions(snapshot.task);
     const resultOption = resultOptions.find(
       (option) => option.key === lastMileResultKey
@@ -1493,6 +1507,8 @@ async function openCustomerMap() {
     }
 
     try {
+      isSavingManagementRef.current = true;
+      setIsSavingManagement(true);
       setIsLoading(true);
 
       const location = await captureCurrentLocation();
@@ -1562,6 +1578,8 @@ async function openCustomerMap() {
     } catch (error) {
       await handleError(error);
     } finally {
+      isSavingManagementRef.current = false;
+      setIsSavingManagement(false);
       setIsLoading(false);
     }
   }
@@ -1728,6 +1746,17 @@ async function openCustomerMap() {
 <Pressable style={styles.primaryButton} onPress={startManagement}>
   <Text style={styles.primaryButtonText}>Iniciar gestión</Text>
 </Pressable>
+
+{taskIsLastMile && task.hasPendingLiquidation ? (
+  <Pressable
+    style={styles.liquidationButton}
+    onPress={() =>
+      router.push(`/agent-liquidations?taskId=${encodeURIComponent(task.id)}` as Href)
+    }
+  >
+    <Text style={styles.liquidationButtonText}>Liquidar pedido</Text>
+  </Pressable>
+) : null}
 
           <View style={styles.card}>
             <View style={styles.historyHeader}>
@@ -2373,10 +2402,16 @@ task?.remoteId &&
           </Pressable>
 
           <Pressable
-            style={styles.saveButton}
+            style={[
+              styles.saveButton,
+              isSavingManagement || isLoading ? styles.disabledButton : null,
+            ]}
+            disabled={isSavingManagement || isLoading}
             onPress={taskIsLastMile ? saveLastMileManagement : saveManagement}
           >
-            <Text style={styles.saveButtonText}>Guardar gestion</Text>
+            <Text style={styles.saveButtonText}>
+              {isSavingManagement ? 'Guardando...' : 'Guardar gestion'}
+            </Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -2966,6 +3001,19 @@ receiptButtonText: {
     fontWeight: '900',
     color: '#fff',
   },
+  liquidationButton: {
+    paddingVertical: 13,
+    alignItems: 'center',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#b42318',
+    backgroundColor: '#fff5f5',
+  },
+  liquidationButtonText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#b42318',
+  },
   card: {
     padding: 12,
     borderWidth: 1,
@@ -3280,6 +3328,9 @@ modalScrollContent: {
     alignItems: 'center',
     borderRadius: 12,
     backgroundColor: '#137333',
+  },
+  disabledButton: {
+    opacity: 0.55,
   },
   saveButtonText: {
     fontSize: 13,

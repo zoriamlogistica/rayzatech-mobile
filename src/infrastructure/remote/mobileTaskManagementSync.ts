@@ -61,11 +61,15 @@ function buildLastMilePayload(
     'Cantidad bultos/items gestionados'
   );
   const operationNumber = getObservationValue(observation, 'Numero operacion');
+  const isLiquidation =
+    normalizeForCompare(lastMileResult) === 'liquidado' ||
+    normalizeForCompare(lastMileSubstatus).includes('liquidada');
   const isPickup =
     task.lastMileTaskType === 'pickup' || task.taskType === 'last_mile_pickup';
   const requiresLiquidation =
-    (isPickup && management.resultStatus === 'successful') ||
-    normalizeForCompare(merchandiseCondition) === 'items sobrantes';
+    !isLiquidation &&
+    ((isPickup && management.resultStatus === 'successful') ||
+      normalizeForCompare(merchandiseCondition) === 'items sobrantes');
 
   return {
     lastMileResult,

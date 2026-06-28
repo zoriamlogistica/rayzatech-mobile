@@ -358,7 +358,7 @@ effectivenessGeneral: summary.effectivenessGeneral,
       {isLastMile && dashboard.pendingLiquidation > 0 ? (
         <Pressable
           style={styles.liquidationAlert}
-          onPress={() => router.push('/agent-managed-tasks' as Href)}
+          onPress={() => router.push('/agent-liquidations' as Href)}
         >
           <Text style={styles.liquidationAlertTitle}>
             Mercaderia pendiente de liquidar
