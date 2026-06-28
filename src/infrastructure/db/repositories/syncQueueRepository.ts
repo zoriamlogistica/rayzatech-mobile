@@ -391,6 +391,34 @@ export async function releaseWaitingRetrySyncItems(): Promise<number> {
   return result.changes ?? 0;
 }
 
+export async function releaseBlockedSyncItems(): Promise<number> {
+  const db = await getDatabase();
+  const now = nowIso();
+
+  const result = await db.runAsync(
+    `
+      UPDATE sync_queue
+      SET
+        status = 'pending',
+        attempt_count = 0,
+        next_attempt_at = NULL,
+        locked_at = NULL,
+        locked_by = NULL,
+        last_error = NULL,
+        last_error_code = NULL,
+        updated_at = ?
+      WHERE status IN ('syncing', 'conflict')
+        OR (
+          status IN ('pending', 'failed')
+          AND attempt_count >= max_attempts
+        );
+    `,
+    [now]
+  );
+
+  return result.changes ?? 0;
+}
+
 export async function markGpsPointSyncItemsAsSuccess(): Promise<number> {
   const db = await getDatabase();
   const now = nowIso();

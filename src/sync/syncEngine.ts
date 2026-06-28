@@ -10,6 +10,7 @@ import {
   markSyncItemAsFailed,
   markSyncItemAsSuccess,
   markSyncItemAsSyncing,
+  releaseBlockedSyncItems,
   releaseWaitingRetrySyncItems,
 } from '@/infrastructure/db/repositories/syncQueueRepository';
 import { listRecentTaskManagements } from '@/infrastructure/db/repositories/taskManagementRepository';
@@ -202,6 +203,33 @@ export async function runDevSyncSimulation(params?: {
         message: 'Waiting retry sync items released for manual sync.',
         payload: {
           releasedRetryItems,
+        },
+      });
+    }
+
+    const releasedBlockedItems = await releaseBlockedSyncItems();
+
+    if (releasedBlockedItems > 0) {
+      await appLogger.warn({
+        scope: 'SYNC_ENGINE',
+        message: 'Blocked sync items released for manual retry.',
+        payload: {
+          releasedBlockedItems,
+        },
+      });
+    }
+
+    const repairedManagements = await repairRecentManagementSync(50);
+
+    if (repairedManagements > 0) {
+      processed += repairedManagements;
+      success += repairedManagements;
+
+      await appLogger.info({
+        scope: 'SYNC_ENGINE',
+        message: 'Recent management repair sync finished.',
+        payload: {
+          repairedManagements,
         },
       });
     }

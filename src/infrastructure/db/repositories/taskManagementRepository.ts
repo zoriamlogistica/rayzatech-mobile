@@ -230,6 +230,9 @@ export async function listRecentTaskManagements(
     `
       SELECT *
       FROM task_managements
+      WHERE sync_status <> 'synced'
+        OR remote_id IS NULL
+        OR is_dirty = 1
       ORDER BY managed_at DESC, management_number DESC
       LIMIT ?;
     `,
