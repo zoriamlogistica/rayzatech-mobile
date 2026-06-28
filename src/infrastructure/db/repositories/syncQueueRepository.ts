@@ -460,6 +460,43 @@ export async function cancelTaskManagementSyncItemsForMissingRemoteTasks(
   return result.changes ?? 0;
 }
 
+export async function cancelTaskManagementSyncItemsNotInTaskIds(
+  taskIds: string[]
+): Promise<number> {
+  const db = await getDatabase();
+  const now = nowIso();
+
+  if (taskIds.length === 0) {
+    return 0;
+  }
+
+  const placeholders = taskIds.map(() => '?').join(', ');
+
+  const result = await db.runAsync(
+    `
+      UPDATE sync_queue
+      SET
+        status = 'cancelled',
+        locked_at = NULL,
+        locked_by = NULL,
+        last_error = 'LOCAL_OBSOLETE_TASK: Management belongs to a task outside the latest remote download.',
+        last_error_code = 'LOCAL_OBSOLETE_TASK',
+        updated_at = ?
+      WHERE entity_type = 'task_management'
+        AND status IN ('pending', 'failed', 'syncing', 'conflict')
+        AND entity_id IN (
+          SELECT id
+          FROM task_managements
+          WHERE remote_id IS NULL
+            AND task_id NOT IN (${placeholders})
+        );
+    `,
+    [now, ...taskIds]
+  );
+
+  return result.changes ?? 0;
+}
+
 export async function clearSuccessfulSyncItems(): Promise<void> {
   const db = await getDatabase();
 

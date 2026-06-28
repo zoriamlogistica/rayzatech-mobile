@@ -390,6 +390,30 @@ export async function markUnsyncedTaskManagementsAsObsoleteForMissingRemoteTasks
   return result.changes ?? 0;
 }
 
+export async function deleteUnsyncedTaskManagementsNotInTaskIds(
+  taskIds: string[]
+): Promise<number> {
+  const db = await getDatabase();
+
+  if (taskIds.length === 0) {
+    return 0;
+  }
+
+  const placeholders = taskIds.map(() => '?').join(', ');
+
+  const result = await db.runAsync(
+    `
+      DELETE FROM task_managements
+      WHERE remote_id IS NULL
+        AND sync_status <> 'synced'
+        AND task_id NOT IN (${placeholders});
+    `,
+    taskIds
+  );
+
+  return result.changes ?? 0;
+}
+
 export async function deleteTaskManagement(id: string): Promise<void> {
   const db = await getDatabase();
 

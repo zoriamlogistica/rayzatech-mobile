@@ -11,8 +11,14 @@ import {
   updateTaskRemoteMasterData,
   upsertTask,
 } from '@/infrastructure/db/repositories/taskRepository';
-import { cancelTaskManagementSyncItemsForMissingRemoteTasks } from '@/infrastructure/db/repositories/syncQueueRepository';
-import { markUnsyncedTaskManagementsAsObsoleteForMissingRemoteTasks } from '@/infrastructure/db/repositories/taskManagementRepository';
+import {
+  cancelTaskManagementSyncItemsForMissingRemoteTasks,
+  cancelTaskManagementSyncItemsNotInTaskIds,
+} from '@/infrastructure/db/repositories/syncQueueRepository';
+import {
+  deleteUnsyncedTaskManagementsNotInTaskIds,
+  markUnsyncedTaskManagementsAsObsoleteForMissingRemoteTasks,
+} from '@/infrastructure/db/repositories/taskManagementRepository';
 import { upsertTaskSeries } from '@/infrastructure/db/repositories/taskSeriesRepository';
 import { fetchMobileRemoteTasks } from '@/infrastructure/remote/mobileTaskSource';
 import type {
@@ -237,6 +243,7 @@ const remoteIdsReceived = response.tasks
   let conflictsRegistered = 0;
   let obsoleteManagements = 0;
   let obsoleteSyncItems = 0;
+  let staleLocalManagements = 0;
   let seriesDownloaded = 0;
 
   const taskIds: string[] = [];
@@ -337,6 +344,10 @@ obsoleteManagements =
   await markUnsyncedTaskManagementsAsObsoleteForMissingRemoteTasks(
     remoteIdsReceived
   );
+obsoleteSyncItems +=
+  await cancelTaskManagementSyncItemsNotInTaskIds(taskIds);
+staleLocalManagements =
+  await deleteUnsyncedTaskManagementsNotInTaskIds(taskIds);
   
   return {
     downloadedAt: response.downloadedAt,
@@ -345,7 +356,7 @@ obsoleteManagements =
     updated,
     skippedDirty,
     conflictsRegistered,
-    obsoleteManagements,
+    obsoleteManagements: obsoleteManagements + staleLocalManagements,
     obsoleteSyncItems,
     seriesDownloaded,
     taskIds,
