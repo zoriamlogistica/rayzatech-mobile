@@ -358,6 +358,44 @@ export async function getSyncQueueCounters(): Promise<{
   };
 }
 
+export async function listRecentSyncProblems(limit = 3): Promise<
+  Array<{
+    entityType: string;
+    entityId: string;
+    errorCode?: string;
+    error?: string;
+  }>
+> {
+  const db = await getDatabase();
+
+  const rows = await db.getAllAsync<{
+    entity_type: string;
+    entity_id: string;
+    last_error_code: string | null;
+    last_error: string | null;
+  }>(
+    `
+      SELECT entity_type, entity_id, last_error_code, last_error
+      FROM sync_queue
+      WHERE status IN ('failed', 'conflict')
+        AND (
+          last_error IS NOT NULL
+          OR last_error_code IS NOT NULL
+        )
+      ORDER BY updated_at DESC
+      LIMIT ?;
+    `,
+    [limit]
+  );
+
+  return rows.map((row) => ({
+    entityType: row.entity_type,
+    entityId: row.entity_id,
+    errorCode: row.last_error_code ?? undefined,
+    error: row.last_error ?? undefined,
+  }));
+}
+
 export async function clearSuccessfulSyncItems(): Promise<void> {
   const db = await getDatabase();
 

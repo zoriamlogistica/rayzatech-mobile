@@ -10,7 +10,10 @@ import { downloadDevTasksToLocalCache } from '@/application/tasks/taskDownload.s
 import { getAgentTaskSummary } from '@/application/tasks/taskQuery.service';
 import { getSelectedFieldOperation } from '@/application/tasks/operationSelection.service';
 import { AgentScreen } from '@/components/agent-screen';
-import { getSyncQueueCounters } from '@/infrastructure/db/repositories/syncQueueRepository';
+import {
+  getSyncQueueCounters,
+  listRecentSyncProblems,
+} from '@/infrastructure/db/repositories/syncQueueRepository';
 import { addAutoSyncListener } from '@/sync/autoSyncService';
 import { runDevSyncSimulation } from '@/sync/syncEngine';
 
@@ -152,10 +155,19 @@ effectivenessGeneral: summary.effectivenessGeneral,
         limit: 100,
         forceFail: false,
       });
+      const syncProblems = await listRecentSyncProblems(3);
 
       const downloadResult = await downloadDevTasksToLocalCache();
 
       await loadDashboard();
+
+      const problemText =
+        syncProblems.length > 0
+          ? '\n\nUltimo error:\n' +
+            syncProblems
+              .map((item) => `- ${item.entityType}: ${item.error || item.errorCode}`)
+              .join('\n')
+          : '';
 
       Alert.alert(
         'Sincronización finalizada',
@@ -163,7 +175,8 @@ effectivenessGeneral: summary.effectivenessGeneral,
           `Insertadas: ${downloadResult.inserted}.\n` +
           `Actualizadas: ${downloadResult.updated}.\n` +
           `Sincronizadas: ${syncResult.success}.\n` +
-          `Pendientes: ${syncResult.remainingPending}.`
+          `Pendientes: ${syncResult.remainingPending}.` +
+          problemText
       );
     } catch (error) {
       await handleError(error);
