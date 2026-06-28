@@ -423,7 +423,13 @@ export async function getAgentTaskSummary(filter?: {
       ? Math.round((effectiveTasks / visibleTasks.length) * 100)
       : 0;
 
-  const pendingSyncItems = await countPendingSyncItems();
+  const pendingQueueItems = await countPendingSyncItems();
+  const unsyncedLocalManagements = latestManagements.filter(
+    (management) =>
+      management &&
+      (!management.remoteId || management.syncStatus !== 'synced')
+  ).length;
+  const pendingSyncItems = pendingQueueItems + unsyncedLocalManagements;
 
   return {
     totalTasks: visibleTasks.length,

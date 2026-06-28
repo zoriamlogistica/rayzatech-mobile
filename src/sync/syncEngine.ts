@@ -70,7 +70,7 @@ function getErrorCode(message: string): string {
   return message || 'SYNC_ERROR';
 }
 
-function shouldCancelStaleEvidenceSync(item: SyncQueueItem, message: string) {
+function shouldCancelStaleRemoteTaskSync(item: SyncQueueItem, message: string) {
   return (
     item.entityType === 'evidence' &&
     message.includes('MOBILE_API_ERROR:404:Task not found')
@@ -100,27 +100,53 @@ async function syncOneItem(item: SyncQueueItem): Promise<void> {
   throw new Error(`UNSUPPORTED_SYNC_ENTITY_TYPE:${item.entityType}`);
 }
 
-async function repairRecentManagementSync(limit = 50): Promise<number> {
+async function repairRecentManagementSync(limit = 50): Promise<{
+  success: number;
+  failed: number;
+  details: SyncEngineResult['details'];
+}> {
   const recentManagements = await listRecentTaskManagements(limit);
-  let repaired = 0;
+  let success = 0;
+  let failed = 0;
+  const details: SyncEngineResult['details'] = [];
 
   for (const management of recentManagements) {
     try {
       await syncTaskManagementToRemote(management.id);
-      repaired += 1;
+      success += 1;
+      details.push({
+        id: `repair-${management.id}`,
+        entityType: 'task_management',
+        entityId: management.id,
+        operation: 'REPAIR',
+        result: 'success',
+        message: 'Recent management synced during repair.',
+        finalized: true,
+      });
     } catch (error) {
+      const message = getErrorMessage(error);
+      failed += 1;
+      details.push({
+        id: `repair-${management.id}`,
+        entityType: 'task_management',
+        entityId: management.id,
+        operation: 'REPAIR',
+        result: 'failed',
+        message,
+      });
+
       await appLogger.warn({
         scope: 'SYNC_ENGINE',
         message: 'Recent management repair sync failed.',
         payload: {
           managementId: management.id,
-          error: getErrorMessage(error),
+          error: message,
         },
       });
     }
   }
 
-  return repaired;
+  return { success, failed, details };
 }
 
 export async function runDevSyncSimulation(params?: {
@@ -128,14 +154,14 @@ export async function runDevSyncSimulation(params?: {
   forceFail?: boolean;
 }): Promise<SyncEngineResult> {
   if (isSyncRunning) {
-    const repairedManagements = await repairRecentManagementSync(50);
+    const repairResult = await repairRecentManagementSync(50);
 
-    if (repairedManagements > 0) {
+    if (repairResult.success > 0) {
       await appLogger.info({
         scope: 'SYNC_ENGINE',
         message: 'Recent management repair sync finished.',
         payload: {
-          repairedManagements,
+          repairedManagements: repairResult.success,
         },
       });
     }
@@ -153,11 +179,12 @@ export async function runDevSyncSimulation(params?: {
     return {
       processed: 0,
       success: 0,
-      failed: 0,
+      failed: repairResult.failed,
       skipped: 0,
       finalized: 0,
       remainingPending,
       details: [
+        ...repairResult.details,
         {
           id: 'sync-lock',
           entityType: 'sync_engine',
@@ -227,17 +254,20 @@ export async function runDevSyncSimulation(params?: {
       });
     }
 
-    const repairedManagements = await repairRecentManagementSync(50);
+    const repairResult = await repairRecentManagementSync(50);
 
-    if (repairedManagements > 0) {
-      processed += repairedManagements;
-      success += repairedManagements;
+    if (repairResult.success > 0 || repairResult.failed > 0) {
+      processed += repairResult.success + repairResult.failed;
+      success += repairResult.success;
+      failed += repairResult.failed;
+      details.push(...repairResult.details);
 
       await appLogger.info({
         scope: 'SYNC_ENGINE',
         message: 'Recent management repair sync finished.',
         payload: {
-          repairedManagements,
+          repairedManagements: repairResult.success,
+          failedManagementRepairs: repairResult.failed,
         },
       });
     }
@@ -377,7 +407,7 @@ export async function runDevSyncSimulation(params?: {
         const message = getErrorMessage(error);
         const errorCode = getErrorCode(message);
 
-        if (shouldCancelStaleEvidenceSync(item, message)) {
+        if (shouldCancelStaleRemoteTaskSync(item, message)) {
           skipped += 1;
 
           await markSyncItemAsCancelled({
@@ -388,7 +418,7 @@ export async function runDevSyncSimulation(params?: {
 
           await appLogger.warn({
             scope: 'SYNC_ENGINE',
-            message: 'Stale evidence sync cancelled because the remote task no longer exists.',
+            message: 'Stale sync item cancelled because the remote task no longer exists.',
             payload: {
               id: item.id,
               entityType: item.entityType,

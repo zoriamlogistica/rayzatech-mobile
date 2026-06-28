@@ -114,7 +114,13 @@ unsuccessful: summary.byStatus.unsuccessful,
 partials: summary.partialTasks,
 pendingLiquidation: summary.pendingLiquidationTasks,
 effectivenessGeneral: summary.effectivenessGeneral,
-  sync: syncCounters,
+  sync: {
+    ...syncCounters,
+    totalPending: Math.max(
+      syncCounters.totalPending,
+      summary.pendingSyncItems
+    ),
+  },
   loadedAt: new Date().toISOString(),
 });
     } catch (error) {
@@ -162,10 +168,17 @@ effectivenessGeneral: summary.effectivenessGeneral,
       await loadDashboard();
 
       const problemText =
+        syncResult.details.some((item) => item.result === 'failed') ||
         syncProblems.length > 0
           ? '\n\nUltimo error:\n' +
-            syncProblems
-              .map((item) => `- ${item.entityType}: ${item.error || item.errorCode}`)
+            [
+              ...syncResult.details
+                .filter((item) => item.result === 'failed')
+                .map((item) => `- ${item.entityType}: ${item.message}`),
+              ...syncProblems.map(
+                (item) => `- ${item.entityType}: ${item.error || item.errorCode}`
+              ),
+            ]
               .join('\n')
           : '';
 
@@ -175,6 +188,7 @@ effectivenessGeneral: summary.effectivenessGeneral,
           `Insertadas: ${downloadResult.inserted}.\n` +
           `Actualizadas: ${downloadResult.updated}.\n` +
           `Sincronizadas: ${syncResult.success}.\n` +
+          `Fallidas: ${syncResult.failed}.\n` +
           `Pendientes: ${syncResult.remainingPending}.` +
           problemText
       );
