@@ -7,6 +7,7 @@ import {
   countPendingSyncItems,
   listPendingSyncItems,
   markGpsPointSyncItemsAsSuccess,
+  markSyncItemAsCancelled,
   markSyncItemAsFailed,
   markSyncItemAsSuccess,
   markSyncItemAsSyncing,
@@ -67,6 +68,13 @@ function getErrorCode(message: string): string {
   }
 
   return message || 'SYNC_ERROR';
+}
+
+function shouldCancelStaleEvidenceSync(item: SyncQueueItem, message: string) {
+  return (
+    item.entityType === 'evidence' &&
+    message.includes('MOBILE_API_ERROR:404:Task not found')
+  );
 }
 
 async function syncOneItem(item: SyncQueueItem): Promise<void> {
@@ -368,6 +376,39 @@ export async function runDevSyncSimulation(params?: {
       } catch (error) {
         const message = getErrorMessage(error);
         const errorCode = getErrorCode(message);
+
+        if (shouldCancelStaleEvidenceSync(item, message)) {
+          skipped += 1;
+
+          await markSyncItemAsCancelled({
+            id: item.id,
+            error: message,
+            errorCode,
+          });
+
+          await appLogger.warn({
+            scope: 'SYNC_ENGINE',
+            message: 'Stale evidence sync cancelled because the remote task no longer exists.',
+            payload: {
+              id: item.id,
+              entityType: item.entityType,
+              entityId: item.entityId,
+              errorCode,
+            },
+          });
+
+          details.push({
+            id: item.id,
+            entityType: item.entityType,
+            entityId: item.entityId,
+            operation: item.operation,
+            result: 'skipped',
+            message,
+          });
+
+          continue;
+        }
+
         const nextAttemptAt = calculateNextAttemptAt(item.attemptCount);
 
         await markSyncItemAsFailed({

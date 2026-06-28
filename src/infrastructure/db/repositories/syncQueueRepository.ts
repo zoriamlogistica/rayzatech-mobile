@@ -267,6 +267,31 @@ export async function markSyncItemAsConflict(params: {
   );
 }
 
+export async function markSyncItemAsCancelled(params: {
+  id: string;
+  error: string;
+  errorCode?: string;
+}): Promise<void> {
+  const db = await getDatabase();
+
+  const now = nowIso();
+
+  await db.runAsync(
+    `
+      UPDATE sync_queue
+      SET
+        status = 'cancelled',
+        locked_at = NULL,
+        locked_by = NULL,
+        last_error = ?,
+        last_error_code = ?,
+        updated_at = ?
+      WHERE id = ?;
+    `,
+    [params.error, params.errorCode ?? null, now, params.id]
+  );
+}
+
 export async function countPendingSyncItems(): Promise<number> {
   const db = await getDatabase();
 

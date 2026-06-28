@@ -108,7 +108,11 @@ export async function syncTaskManagementToRemote(
     '/api/mobile/task-managements',
     {
       localId: management.id,
+      localTaskId: task.id,
       remoteTaskId: task.remoteId,
+      taskNumber: task.taskNumber ?? null,
+      routeNumber: task.routeNumber ?? null,
+      scheduledDate: task.scheduledDate ?? null,
       resultStatus: management.resultStatus,
       reason: management.reason ?? null,
       observation: management.observation ?? null,
