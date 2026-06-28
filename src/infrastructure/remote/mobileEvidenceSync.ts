@@ -28,6 +28,40 @@ function getFallbackFileName(evidenceId: string): string {
   return `${evidenceId}.webp`;
 }
 
+function getObservationValue(
+  observation: string | undefined,
+  label: string
+): string | null {
+  if (!observation) {
+    return null;
+  }
+
+  const prefix = `${label}:`;
+  const line = observation
+    .split('\n')
+    .find((item) => item.trim().toLowerCase().startsWith(prefix.toLowerCase()));
+
+  if (!line) {
+    return null;
+  }
+
+  const value = line.slice(prefix.length).trim();
+  return value || null;
+}
+
+function managementContainsEvidenceId(
+  management: Awaited<ReturnType<typeof getTaskManagementById>>,
+  evidenceId: string
+) {
+  const ids =
+    getObservationValue(management?.observation, 'Evidencias gestion')
+      ?.split(',')
+      .map((item) => item.trim())
+      .filter(Boolean) || [];
+
+  return ids.includes(evidenceId);
+}
+
 export async function syncEvidenceToRemote(
   evidenceId: string
 ): Promise<MobileEvidenceUploadResponse> {
@@ -70,7 +104,10 @@ export async function syncEvidenceToRemote(
 
   if (!management && task.fieldOperationType === 'last_mile') {
     const managements = await listTaskManagementsByTask(evidence.taskId);
-    management = managements[0] ?? null;
+    management =
+      managements.find((item) => managementContainsEvidenceId(item, evidence.id)) ??
+      managements[0] ??
+      null;
   }
 
   if (!management) {

@@ -240,10 +240,42 @@ function getObservationValue(
   return value || null;
 }
 
+function getObservationListValue(
+  observation: string | undefined,
+  label: string
+): string[] {
+  return (
+    getObservationValue(observation, label)
+      ?.split(',')
+      .map((item) => item.trim())
+      .filter(Boolean) || []
+  );
+}
+
 function getManagementEvidencePhotos(
   item: TaskManagementHistoryItem,
   evidences: TaskDetailSnapshot['evidences']
 ) {
+  const explicitEvidenceIds = getObservationListValue(
+    item.management.observation,
+    'Evidencias gestion'
+  );
+
+  if (explicitEvidenceIds.length > 0) {
+    const exactPhotos = explicitEvidenceIds
+      .map((evidenceId) => evidences.find((evidence) => evidence.id === evidenceId))
+      .filter(Boolean) as TaskDetailSnapshot['evidences'];
+
+    if (
+      item.generalEvidence &&
+      !exactPhotos.some((photo) => photo.id === item.generalEvidence?.id)
+    ) {
+      exactPhotos.unshift(item.generalEvidence);
+    }
+
+    return exactPhotos;
+  }
+
   const managedAt = new Date(item.management.managedAt).getTime();
   const timeWindowMs = 30 * 60 * 1000;
   const photos = evidences.filter((evidence) => {
@@ -1490,6 +1522,15 @@ async function openCustomerMap() {
       lastMileResultKey === 'not_delivered' ||
       lastMileResultKey === 'not_picked_up';
     const evidenceId = isUnsuccessful ? houseFrontEvidenceId : generalEvidenceId;
+    const evidenceIdsForManagement = (
+      isUnsuccessful ? lastMileFacadePhotos : lastMileEvidencePhotos
+    ).map((photo) => photo.id);
+    const exactEvidenceIds = Array.from(
+      new Set([
+        evidenceId,
+        ...evidenceIdsForManagement,
+      ].filter(Boolean) as string[])
+    );
     const requiresLiquidation =
       !isUnsuccessful &&
       (isLastMilePickup(snapshot.task) ||
@@ -1532,6 +1573,9 @@ async function openCustomerMap() {
           : null,
         isCashOnDeliverySubstate(lastMileSubstate) && lastMileOperationNumber
           ? `Numero operacion: ${lastMileOperationNumber}`
+          : null,
+        exactEvidenceIds.length > 0
+          ? `Evidencias gestion: ${exactEvidenceIds.join(',')}`
           : null,
         managementObservation
           ? `Observaciones agente: ${managementObservation}`
