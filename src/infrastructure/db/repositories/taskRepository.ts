@@ -431,7 +431,7 @@ export async function markTaskAsSynced(params: {
     `
       UPDATE tasks
       SET
-        remote_id = COALESCE(?, remote_id),
+        remote_id = ?,
         remote_updated_at = COALESCE(?, remote_updated_at),
         version = COALESCE(?, version),
         sync_status = 'synced',
