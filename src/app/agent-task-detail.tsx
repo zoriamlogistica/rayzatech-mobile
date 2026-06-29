@@ -414,6 +414,7 @@ function getManagementStatusLabel(status: string): string {
   if (status === 'successful') return 'Exitosa';
   if (status === 'unsuccessful') return 'No exitosa';
   if (status === 'rescheduled') return 'Reprogramada';
+  if (status === 'liquidated') return 'Liquidado';
 
   return status;
 }
@@ -1852,6 +1853,11 @@ async function openCustomerMap() {
                   item.management.observation,
                   'Observaciones agente'
                 );
+                const isLiquidationManagement =
+                  normalizeForCompare(lastMileResult).includes('liquidado');
+                const managementStatusLabel = isLiquidationManagement
+                  ? 'Liquidado'
+                  : getManagementStatusLabel(item.management.resultStatus);
 
                 return (
                 <View key={item.management.id} style={styles.managementCard}>
@@ -1863,10 +1869,14 @@ async function openCustomerMap() {
                     <Text
                       style={[
                         styles.managementStatusBadge,
-                        getManagementStatusStyle(item.management.resultStatus),
+                        getManagementStatusStyle(
+                          isLiquidationManagement
+                            ? 'liquidated'
+                            : item.management.resultStatus
+                        ),
                       ]}
                     >
-                      {getManagementStatusLabel(item.management.resultStatus)}
+                      {managementStatusLabel}
                     </Text>
                   </View>
 
@@ -1895,7 +1905,7 @@ async function openCustomerMap() {
                         Resultado de la gestion:{' '}
                         {formatValue(
                           lastMileResult ||
-                            getManagementStatusLabel(item.management.resultStatus)
+                            managementStatusLabel
                         )}
                       </Text>
                       <Text style={styles.metaText}>
@@ -2939,6 +2949,7 @@ function getTaskStatusStyle(status?: string) {
 }
 
 function getManagementStatusStyle(status?: string) {
+  if (status === 'liquidated') return styles.statusLiquidated;
   if (status === 'successful') return styles.statusCompleted;
   if (status === 'unsuccessful') return styles.statusUnsuccessful;
   if (status === 'rescheduled') return styles.statusRescheduled;
@@ -3004,6 +3015,10 @@ receiptButtonText: {
   statusCompleted: {
     backgroundColor: '#e8f5ee',
     color: '#137333',
+  },
+  statusLiquidated: {
+    backgroundColor: '#e0f2fe',
+    color: '#075985',
   },
   statusUnsuccessful: {
     backgroundColor: '#fdecec',

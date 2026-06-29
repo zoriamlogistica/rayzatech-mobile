@@ -106,7 +106,6 @@ export async function syncEvidenceToRemote(
     const managements = await listTaskManagementsByTask(evidence.taskId);
     management =
       managements.find((item) => managementContainsEvidenceId(item, evidence.id)) ??
-      managements[0] ??
       null;
   }
 
