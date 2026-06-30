@@ -35,6 +35,7 @@ import {
   type TaskManagementHistoryItem,
 } from '@/application/tasks/taskQuery.service';
 import { AgentScreen } from '@/components/agent-screen';
+import { TextIcon } from '@/components/text-icon';
 import type { RecoveredDeviceType } from '@/domain/tasks/recoveredDevice.types';
 import {
   LAST_MILE_DELIVERY_RESULTS,
@@ -59,7 +60,6 @@ import {
 } from '@/shared/time/limaTime';
 import { getDisplayZone } from '@/shared/zones';
 import { runDevSyncSimulation } from '@/sync/syncEngine';
-import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, {
   type DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
@@ -1779,19 +1779,19 @@ async function openCustomerMap() {
 
 <View style={styles.detailQuickActions}>
   <DetailQuickAction
-    iconName="call-outline"
+    iconName="call"
     label="Llamar"
     onPress={callCustomer}
   />
 
   <DetailQuickAction
-    iconName="logo-whatsapp"
+    iconName="whatsapp"
     label="WhatsApp"
     onPress={messageCustomer}
   />
 
   <DetailQuickAction
-    iconName="location-outline"
+    iconName="location"
     label="Mapa"
     onPress={openCustomerMap}
   />
@@ -2326,7 +2326,7 @@ task?.remoteId &&
     style={styles.scanButton}
     onPress={() => openSerialScanner(device.id)}
   >
-    <Ionicons name="scan-outline" size={18} color="#fff" />
+    <TextIcon name="scan" size={18} color="#fff" />
     <Text style={styles.scanButtonText}>Escanear</Text>
   </Pressable>
 </View>
@@ -2691,13 +2691,13 @@ function DetailQuickAction({
   label,
   onPress,
 }: {
-  iconName: keyof typeof Ionicons.glyphMap;
+  iconName: 'call' | 'whatsapp' | 'location';
   label: string;
   onPress: () => void;
 }) {
   return (
     <Pressable style={styles.detailQuickActionButton} onPress={onPress}>
-      <Ionicons name={iconName} size={20} color="#137333" />
+      <TextIcon name={iconName} size={20} color="#137333" />
       <Text style={styles.detailQuickActionText}>{label}</Text>
     </Pressable>
   );

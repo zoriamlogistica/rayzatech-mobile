@@ -9,10 +9,10 @@ import {
   type TaskListItem,
 } from '@/application/tasks/taskQuery.service';
 import { AgentScreen } from '@/components/agent-screen';
+import { TextIcon } from '@/components/text-icon';
 import { listTaskManagementsByTask } from '@/infrastructure/db/repositories/taskManagementRepository';
 import { getDisplayZone } from '@/shared/zones';
 import { runDevSyncSimulation } from '@/sync/syncEngine';
-import { Ionicons } from '@expo/vector-icons';
 import {
   router,
   useFocusEffect,
@@ -502,9 +502,9 @@ function TaskCard({
       ) : null}
 
       <View style={styles.quickActions}>
-        <QuickAction iconName="call-outline" onPress={onCall} />
-        <QuickAction iconName="logo-whatsapp" onPress={onMessage} />
-        <QuickAction iconName="location-outline" onPress={onMap} />
+        <QuickAction iconName="call" onPress={onCall} />
+        <QuickAction iconName="whatsapp" onPress={onMessage} />
+        <QuickAction iconName="location" onPress={onMap} />
       </View>
     </Pressable>
   );
@@ -514,12 +514,12 @@ function QuickAction({
   iconName,
   onPress,
 }: {
-  iconName: keyof typeof Ionicons.glyphMap;
+  iconName: 'call' | 'whatsapp' | 'location';
   onPress: () => void;
 }) {
   return (
     <Pressable style={styles.quickActionButton} onPress={onPress}>
-      <Ionicons name={iconName} size={18} color="#137333" />
+      <TextIcon name={iconName} size={18} color="#137333" />
     </Pressable>
   );
 }

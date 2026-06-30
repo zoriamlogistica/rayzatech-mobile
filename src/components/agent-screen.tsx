@@ -1,6 +1,5 @@
 // src/components/agent-screen.tsx
 
-import { Ionicons } from '@expo/vector-icons';
 import { router, type Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import {
@@ -14,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AgentSideMenu } from '@/components/agent-side-menu';
+import { TextIcon } from '@/components/text-icon';
 
 type AgentScreenProps = {
   active: 'dashboard' | 'tasks' | 'managed' | 'profile';
@@ -66,7 +66,7 @@ export function AgentScreen({
               style={styles.homeIconButton}
               onPress={() => router.push('/agent-dashboard' as Href)}
             >
-              <Ionicons name="home-outline" size={22} color="#137333" />
+              <TextIcon name="home" size={22} color="#137333" />
             </Pressable>
 
             <Pressable
@@ -77,7 +77,7 @@ export function AgentScreen({
               disabled={isSyncing || !onSyncPress}
               onPress={onSyncPress}
             >
-              <Ionicons name="sync-outline" size={22} color="#FFFFFF" />
+              <TextIcon name="sync" size={22} color="#FFFFFF" />
             </Pressable>
           </View>
         ) : (
