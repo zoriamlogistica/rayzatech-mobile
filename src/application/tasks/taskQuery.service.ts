@@ -233,9 +233,11 @@ export async function listCachedTasks(
         return false;
       }
 
-      const scheduledDate = filter?.scheduledDate ?? getTodayLimaDate();
-
-      if (task.scheduledDate !== scheduledDate && !task.hasPendingLiquidation) {
+      if (
+        filter?.scheduledDate &&
+        task.scheduledDate !== filter.scheduledDate &&
+        !task.hasPendingLiquidation
+      ) {
         return false;
       }
 
@@ -358,7 +360,6 @@ export async function getAgentTaskSummary(filter?: {
   const tasks = await listTasks();
   const activeSession = await getActiveLocalSession();
   const activeAgentId = activeSession?.agentId ?? activeSession?.userId;
-  const todayLima = getTodayLimaDate();
 
   const visibleTasks = tasks.filter((task) => {
     const assignedToAnotherLocalAgent =
@@ -368,10 +369,6 @@ export async function getAgentTaskSummary(filter?: {
       !task.remoteId;
 
     if (assignedToAnotherLocalAgent) {
-      return false;
-    }
-
-    if (task.scheduledDate !== todayLima && !task.hasPendingLiquidation) {
       return false;
     }
 
@@ -480,7 +477,6 @@ export async function getAgentOperationAvailability(): Promise<AgentOperationAva
   const tasks = await listTasks();
   const activeSession = await getActiveLocalSession();
   const activeAgentId = activeSession?.agentId ?? activeSession?.userId;
-  const todayLima = getTodayLimaDate();
 
   const visibleTasks = tasks.filter((task) => {
     const hasRemoteAuthenticatedTask = Boolean(task.remoteId);
@@ -491,10 +487,6 @@ export async function getAgentOperationAvailability(): Promise<AgentOperationAva
       !hasRemoteAuthenticatedTask;
 
     if (assignedToAnotherLocalAgent) {
-      return false;
-    }
-
-    if (task.scheduledDate !== todayLima && !task.hasPendingLiquidation) {
       return false;
     }
 
