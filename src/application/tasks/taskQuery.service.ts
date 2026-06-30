@@ -216,7 +216,13 @@ export async function listCachedTasks(
   const activeAgentId = activeSession?.agentId ?? activeSession?.userId;
 
   const visibleTasks = tasks.filter((task) => {
-      if (activeAgentId && task.assignedUserId && task.assignedUserId !== activeAgentId) {
+      const assignedToAnotherLocalAgent =
+        activeAgentId &&
+        task.assignedUserId &&
+        task.assignedUserId !== activeAgentId &&
+        !task.remoteId;
+
+      if (assignedToAnotherLocalAgent) {
         return false;
       }
 
@@ -355,11 +361,13 @@ export async function getAgentTaskSummary(filter?: {
   const todayLima = getTodayLimaDate();
 
   const visibleTasks = tasks.filter((task) => {
-    if (
+    const assignedToAnotherLocalAgent =
       activeAgentId &&
       task.assignedUserId &&
-      task.assignedUserId !== activeAgentId
-    ) {
+      task.assignedUserId !== activeAgentId &&
+      !task.remoteId;
+
+    if (assignedToAnotherLocalAgent) {
       return false;
     }
 
@@ -475,11 +483,14 @@ export async function getAgentOperationAvailability(): Promise<AgentOperationAva
   const todayLima = getTodayLimaDate();
 
   const visibleTasks = tasks.filter((task) => {
-    if (
+    const hasRemoteAuthenticatedTask = Boolean(task.remoteId);
+    const assignedToAnotherLocalAgent =
       activeAgentId &&
       task.assignedUserId &&
-      task.assignedUserId !== activeAgentId
-    ) {
+      task.assignedUserId !== activeAgentId &&
+      !hasRemoteAuthenticatedTask;
+
+    if (assignedToAnotherLocalAgent) {
       return false;
     }
 

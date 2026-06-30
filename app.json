@@ -52,7 +52,8 @@
       ],
       "expo-camera",
       "@react-native-community/datetimepicker",
-      "expo-image"
+      "expo-image",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,
