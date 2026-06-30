@@ -166,6 +166,25 @@ effectivenessGeneral: summary.effectivenessGeneral,
       const downloadResult = await downloadDevTasksToLocalCache();
 
       await loadDashboard();
+      const summaryAfterDownload = await getAgentTaskSummary({
+        fieldOperationType: selectedOperation,
+      });
+      const syncCountersAfterDownload = await getSyncQueueCounters();
+
+      if (
+        summaryAfterDownload.totalTasks === 0 &&
+        (downloadResult.operationAvailability.inverse > 0 ||
+          downloadResult.operationAvailability.lastMile > 0)
+      ) {
+        setDashboard(
+          dashboardFromServerAvailability({
+            selectedOperation,
+            inverse: downloadResult.operationAvailability.inverse,
+            lastMile: downloadResult.operationAvailability.lastMile,
+            syncCounters: syncCountersAfterDownload,
+          })
+        );
+      }
 
       const problemText =
         syncResult.details.some((item) => item.result === 'failed') ||
@@ -456,6 +475,30 @@ function MiniSync({ label, value }: { label: string; value: number }) {
       <Text style={styles.syncMiniLabel}>{label}</Text>
     </View>
   );
+}
+
+function dashboardFromServerAvailability(params: {
+  selectedOperation: 'inverse' | 'last_mile';
+  inverse: number;
+  lastMile: number;
+  syncCounters: DashboardState['sync'];
+}): DashboardState {
+  const totalTasks =
+    params.selectedOperation === 'last_mile' ? params.lastMile : params.inverse;
+
+  return {
+    totalTasks,
+    pending: totalTasks,
+    inProgress: 0,
+    completed: 0,
+    rescheduled: 0,
+    unsuccessful: 0,
+    partials: 0,
+    pendingLiquidation: 0,
+    effectivenessGeneral: 0,
+    sync: params.syncCounters,
+    loadedAt: new Date().toISOString(),
+  };
 }
 
 const styles = StyleSheet.create({
