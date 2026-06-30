@@ -1,5 +1,5 @@
 import { router, useFocusEffect, type Href } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -31,25 +31,28 @@ export default function AgentOperationSelectScreen() {
   const [selected, setSelected] = useState<FieldOperationSelection | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const lastDownloadedAvailabilityRef =
+    useRef<AgentOperationAvailability | null>(null);
 
   const loadAvailability = useCallback(async () => {
     try {
       setIsLoading(true);
 
       const result = await getAgentOperationAvailability();
+      const fallback = lastDownloadedAvailabilityRef.current;
+      const nextAvailability =
+        result.inverse > 0 || result.lastMile > 0 || !fallback
+          ? result
+          : fallback;
 
-      setAvailability(result);
+      setAvailability(nextAvailability);
 
-      if (result.inverse > 0 && result.lastMile === 0) {
+      if (nextAvailability.inverse > 0 && nextAvailability.lastMile === 0) {
         setSelected('inverse');
-      } else if (result.lastMile > 0 && result.inverse === 0) {
+      } else if (nextAvailability.lastMile > 0 && nextAvailability.inverse === 0) {
         setSelected('last_mile');
-      } else if (
-        selected &&
-        ((selected === 'inverse' && result.inverse === 0) ||
-          (selected === 'last_mile' && result.lastMile === 0))
-      ) {
-        setSelected(null);
+      } else if (nextAvailability.inverse === 0 && nextAvailability.lastMile === 0) {
+        setSelected((current) => (current ? null : current));
       }
     } catch (error) {
       const fieldError = classifyFieldError(error);
@@ -57,7 +60,7 @@ export default function AgentOperationSelectScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [selected]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -90,6 +93,7 @@ export default function AgentOperationSelectScreen() {
           ? localAvailability
           : downloadResult.operationAvailability;
 
+      lastDownloadedAvailabilityRef.current = nextAvailability;
       setAvailability(nextAvailability);
 
       if (nextAvailability.inverse > 0 && nextAvailability.lastMile === 0) {
