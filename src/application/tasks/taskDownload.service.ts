@@ -34,6 +34,40 @@ import {
   type TaskDownloadDecision,
 } from './taskDownloadConflictPolicy';
 
+export type DownloadedTaskListItem = Pick<
+  Task,
+  | 'id'
+  | 'remoteId'
+  | 'taskNumber'
+  | 'orderCode'
+  | 'project'
+  | 'routeNumber'
+  | 'guideNumber'
+  | 'fieldOperationType'
+  | 'lastMileTaskType'
+  | 'packageCount'
+  | 'liquidationStatus'
+  | 'hasPendingLiquidation'
+  | 'customerName'
+  | 'customerDocument'
+  | 'customerPhone'
+  | 'department'
+  | 'province'
+  | 'district'
+  | 'address'
+  | 'latitude'
+  | 'longitude'
+  | 'scheduledDate'
+  | 'timeRange'
+  | 'taskType'
+  | 'priority'
+  | 'status'
+  | 'syncStatus'
+  | 'isDirty'
+  | 'isLocked'
+  | 'lockReason'
+>;
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -229,6 +263,7 @@ export type TaskDownloadResult = {
   obsoleteSyncItems: number;
   seriesDownloaded: number;
   taskIds: string[];
+  downloadedTasks: DownloadedTaskListItem[];
   details: TaskDownloadItemResult[];
 };
 
@@ -251,6 +286,7 @@ const remoteIdsReceived = response.tasks
   let seriesDownloaded = 0;
 
   const taskIds: string[] = [];
+  const downloadedTasks: DownloadedTaskListItem[] = [];
   const details: TaskDownloadItemResult[] = [];
 
   for (const remoteTask of response.tasks) {
@@ -303,6 +339,7 @@ if (decision.action === 'skip_dirty' && !isRemoteReopenedForNewVisit) {
 }
 
     const task = mapRemoteTaskToLocalTask(remoteTask);
+    downloadedTasks.push(task);
 
     await upsertTask(task);
 
@@ -372,6 +409,7 @@ staleLocalManagements =
     obsoleteSyncItems,
     seriesDownloaded,
     taskIds,
+    downloadedTasks,
     details,
   };
 }

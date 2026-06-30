@@ -2,7 +2,10 @@
 
 import { classifyFieldError } from '@/application/errors/fieldError.service';
 import { appLogger } from '@/application/logging/appLogger.service';
-import { downloadDevTasksToLocalCache } from '@/application/tasks/taskDownload.service';
+import {
+  downloadDevTasksToLocalCache,
+  type DownloadedTaskListItem,
+} from '@/application/tasks/taskDownload.service';
 import { getSelectedFieldOperation } from '@/application/tasks/operationSelection.service';
 import {
   listCachedTasks,
@@ -36,6 +39,47 @@ type RouteGroup = {
   routeNumber: string;
   tasks: TaskListItem[];
 };
+
+function mapDownloadedTaskToListItem(task: DownloadedTaskListItem): TaskListItem {
+  return {
+    id: task.id,
+    remoteId: task.remoteId,
+    taskNumber: task.taskNumber,
+    orderCode: task.orderCode,
+    project: task.project,
+    routeNumber: task.routeNumber,
+    guideNumber: task.guideNumber,
+    fieldOperationType: task.fieldOperationType,
+    lastMileTaskType: task.lastMileTaskType,
+    packageCount: task.packageCount,
+    liquidationStatus: task.liquidationStatus,
+    hasPendingLiquidation: task.hasPendingLiquidation,
+    customerName: task.customerName,
+    customerDocument: task.customerDocument,
+    customerPhone: task.customerPhone,
+    department: task.department,
+    province: task.province,
+    district: task.district,
+    address: task.address,
+    latitude: task.latitude,
+    longitude: task.longitude,
+    zone: getDisplayZone({
+      zone: undefined,
+      department: task.department,
+      province: task.province,
+      district: task.district,
+    }),
+    scheduledDate: task.scheduledDate,
+    timeRange: task.timeRange,
+    taskType: task.taskType,
+    priority: task.priority,
+    status: task.status,
+    syncStatus: task.syncStatus,
+    isDirty: task.isDirty,
+    isLocked: task.isLocked,
+    lockReason: task.lockReason,
+  };
+}
 
 export default function AgentTasksScreen() {
   const params = useLocalSearchParams<{ filter?: string }>();
@@ -161,6 +205,32 @@ export default function AgentTasksScreen() {
       const downloadResult = await downloadDevTasksToLocalCache();
 
       await loadTasks(activeFilter, searchText, selectedOperation);
+      const localAfterDownload = await listCachedTasks({
+        status: activeFilter === 'all' ? undefined : activeFilter,
+        search: searchText.trim() || undefined,
+        fieldOperationType: selectedOperation,
+      });
+
+      if (localAfterDownload.length === 0) {
+        const downloadedVisibleTasks = downloadResult.downloadedTasks
+          .filter(
+            (task) =>
+              (task.fieldOperationType ?? 'inverse') === selectedOperation
+          )
+          .filter((task) =>
+            activeFilter === 'all' ? true : task.status === activeFilter
+          )
+          .map(mapDownloadedTaskToListItem);
+
+        if (downloadedVisibleTasks.length > 0) {
+          setTasks(downloadedVisibleTasks);
+          setPendingLiquidationCount(
+            downloadedVisibleTasks.filter((task) => task.hasPendingLiquidation)
+              .length
+          );
+          setPartialTaskIds(new Set());
+        }
+      }
 
       Alert.alert(
         'Sincronizacion finalizada',
