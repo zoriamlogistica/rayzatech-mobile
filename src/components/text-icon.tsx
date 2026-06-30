@@ -1,20 +1,45 @@
-import { StyleSheet, Text } from 'react-native';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import type { ComponentProps } from 'react';
 
-type TextIconName =
+export type TextIconName =
   | 'home'
   | 'sync'
   | 'call'
   | 'whatsapp'
   | 'location'
-  | 'scan';
+  | 'scan'
+  | 'chart'
+  | 'clipboard'
+  | 'clock'
+  | 'check'
+  | 'close'
+  | 'percent'
+  | 'play'
+  | 'refresh'
+  | 'eye'
+  | 'half'
+  | 'alert';
 
-const ICON_LABELS: Record<TextIconName, string> = {
-  home: '⌂',
-  sync: '↻',
-  call: '☎',
-  whatsapp: 'WA',
-  location: '⌖',
-  scan: '▣',
+type VectorIconName = ComponentProps<typeof MaterialCommunityIcons>['name'];
+
+const ICON_NAMES: Record<TextIconName, VectorIconName> = {
+  home: 'home-outline',
+  sync: 'sync',
+  call: 'phone-outline',
+  whatsapp: 'whatsapp',
+  location: 'map-marker-outline',
+  scan: 'barcode-scan',
+  chart: 'chart-box-outline',
+  clipboard: 'clipboard-text-outline',
+  clock: 'clock-outline',
+  check: 'check-bold',
+  close: 'close-thick',
+  percent: 'percent-outline',
+  play: 'play-circle-outline',
+  refresh: 'refresh',
+  eye: 'eye-outline',
+  half: 'fraction-one-half',
+  alert: 'alert-outline',
 };
 
 export function TextIcon({
@@ -26,26 +51,5 @@ export function TextIcon({
   color?: string;
   size?: number;
 }) {
-  return (
-    <Text
-      allowFontScaling={false}
-      style={[
-        styles.icon,
-        {
-          color,
-          fontSize: size,
-          lineHeight: size + 2,
-        },
-      ]}
-    >
-      {ICON_LABELS[name]}
-    </Text>
-  );
+  return <MaterialCommunityIcons name={ICON_NAMES[name]} size={size} color={color} />;
 }
-
-const styles = StyleSheet.create({
-  icon: {
-    fontWeight: '900',
-    textAlign: 'center',
-  },
-});

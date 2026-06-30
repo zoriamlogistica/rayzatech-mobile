@@ -36,6 +36,8 @@ import {
   SafeAreaProvider,
 } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { getSelectedFieldOperation } from '@/application/tasks/operationSelection.service';
@@ -54,6 +56,7 @@ function AppRoot({ children }: { children: ReactNode }) {
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const pathname = usePathname();
+  const [iconsLoaded] = useFonts(MaterialCommunityIcons.font);
 
   const [bootstrapResult, setBootstrapResult] =
     useState<AppBootstrapResult | null>(null);
@@ -153,7 +156,7 @@ export default function RootLayout() {
   router.replace('/login' as never);
 }, [bootstrapResult, pathname]);
 
-  if (isBootstrapping || !bootstrapResult) {
+  if (isBootstrapping || !bootstrapResult || !iconsLoaded) {
     return (
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <View

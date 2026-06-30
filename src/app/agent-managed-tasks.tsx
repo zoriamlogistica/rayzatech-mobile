@@ -23,6 +23,7 @@ import {
   type TaskListItem,
 } from '@/application/tasks/taskQuery.service';
 import { AgentSideMenu } from '@/components/agent-side-menu';
+import { TextIcon, type TextIconName } from '@/components/text-icon';
 import { runDevSyncSimulation } from '@/sync/syncEngine';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -318,25 +319,25 @@ export default function AgentManagedTasksScreen() {
 
                     <View style={styles.quickActions}>
                       <QuickAction
-                        icon="☎️"
+                        iconName="call"
                         label="Llamar"
                         onPress={() => callCustomer(task.customerPhone)}
                       />
 
                       <QuickAction
-                        icon="💬"
+                        iconName="whatsapp"
                         label="WhatsApp"
                         onPress={() => messageCustomer(task.customerPhone)}
                       />
 
                       <QuickAction
-                        icon="📍"
+                        iconName="location"
                         label="Mapa"
                         onPress={() => openMap(task)}
                       />
 
                       <QuickAction
-                        icon="👁️"
+                        iconName="eye"
                         label="Detalle"
                         onPress={() => openTask(task.id)}
                       />
@@ -358,17 +359,17 @@ export default function AgentManagedTasksScreen() {
 }
 
 function QuickAction({
-  icon,
+  iconName,
   label,
   onPress,
 }: {
-  icon: string;
+  iconName: TextIconName;
   label: string;
   onPress: () => void;
 }) {
   return (
     <Pressable style={styles.quickActionButton} onPress={onPress}>
-      <Text style={styles.quickActionIcon}>{icon}</Text>
+      <TextIcon name={iconName} size={20} color="#137333" />
       <Text style={styles.quickActionLabel}>{label}</Text>
     </Pressable>
   );

@@ -10,6 +10,7 @@ import { downloadDevTasksToLocalCache } from '@/application/tasks/taskDownload.s
 import { getAgentTaskSummary } from '@/application/tasks/taskQuery.service';
 import { getSelectedFieldOperation } from '@/application/tasks/operationSelection.service';
 import { AgentScreen } from '@/components/agent-screen';
+import { TextIcon, type TextIconName } from '@/components/text-icon';
 import {
   getSyncQueueCounters,
   listRecentSyncProblems,
@@ -240,7 +241,11 @@ effectivenessGeneral: summary.effectivenessGeneral,
         ]}
       >
         <View style={styles.statusIconWrap}>
-          <Text style={styles.statusIcon}>{isSynced ? '✓' : '!'}</Text>
+          <TextIcon
+            name={isSynced ? 'check' : 'alert'}
+            size={34}
+            color={isSynced ? '#11823B' : '#9A6500'}
+          />
         </View>
 
         <View style={styles.statusTextWrap}>
@@ -269,7 +274,7 @@ effectivenessGeneral: summary.effectivenessGeneral,
         <View style={styles.cardHeader}>
           <View style={styles.cardTitleWrap}>
             <View style={styles.cardIconWrap}>
-              <Text style={styles.cardIcon}>📊</Text>
+              <TextIcon name="chart" size={21} color="#14532d" />
             </View>
 
             <Text style={styles.cardTitle}>
@@ -291,21 +296,21 @@ effectivenessGeneral: summary.effectivenessGeneral,
             label="Total"
             value={dashboard.totalTasks}
             onPress={() => router.push('/agent-tasks?filter=all' as Href)}
-            icon="□"
+            iconName="clipboard"
             tone="blue"
           />
           <MetricCard
             label="Pendientes"
             value={dashboard.pending}
             onPress={() => router.push('/agent-tasks?filter=pending' as Href)}
-            icon="⏱"
+            iconName="clock"
             tone="amber"
           />
           <MetricCard
             label="Exitosas"
             value={dashboard.completed}
             onPress={() => router.push('/agent-tasks?filter=completed' as Href)}
-            icon="✓"
+            iconName="check"
             tone="green"
           />
           <MetricCard
@@ -314,21 +319,21 @@ effectivenessGeneral: summary.effectivenessGeneral,
             onPress={() =>
               router.push('/agent-tasks?filter=unsuccessful' as Href)
             }
-            icon="×"
+            iconName="close"
             tone="red"
           />
           <MetricCard
             label="Parciales"
             value={dashboard.partials}
             onPress={() => router.push('/agent-tasks?filter=completed' as Href)}
-            icon="½"
+            iconName="half"
             tone="amber"
           />
           <MetricCard
             label="Efectividad"
             value={dashboard.effectivenessGeneral}
             suffix="%"
-            icon="%"
+            iconName="percent"
             tone="green"
           />
         </View>
@@ -337,37 +342,37 @@ effectivenessGeneral: summary.effectivenessGeneral,
           <MetricCard
   label="Total"
   value={dashboard.totalTasks}
-  icon="▣"
+  iconName="clipboard"
   tone="blue"
 />
 <MetricCard
   label="Pendientes"
   value={dashboard.pending}
-  icon="⏱"
+  iconName="clock"
   tone="amber"
 />
 <MetricCard
   label="En progreso"
   value={dashboard.inProgress}
-  icon="▶"
+  iconName="play"
   tone="blue"
 />
 <MetricCard
   label="Completadas"
   value={dashboard.completed}
-  icon="✓"
+  iconName="check"
   tone="green"
 />
 <MetricCard
   label="Reprogramadas"
   value={dashboard.rescheduled}
-  icon="↻"
+  iconName="refresh"
   tone="amber"
 />
 <MetricCard
   label="No exitosas"
   value={dashboard.unsuccessful}
-  icon="×"
+  iconName="close"
   tone="red"
 />
         </View>
@@ -405,14 +410,14 @@ effectivenessGeneral: summary.effectivenessGeneral,
 function MetricCard({
   label,
   value,
-  icon,
+  iconName,
   tone,
   suffix = '',
   onPress,
 }: {
   label: string;
   value: number;
-  icon: string;
+  iconName: TextIconName;
   tone: 'blue' | 'amber' | 'green' | 'red' | 'purple';
   suffix?: string;
   onPress?: () => void;
@@ -443,7 +448,7 @@ function MetricCard({
   const content = (
     <>
       <View style={[styles.metricIconWrap, toneStyle.icon]}>
-        <Text style={styles.metricIcon}>{icon}</Text>
+        <TextIcon name={iconName} size={22} color={toneStyle.value.color} />
       </View>
 
       <Text style={[styles.metricValue, toneStyle.value]}>{value}{suffix}</Text>
