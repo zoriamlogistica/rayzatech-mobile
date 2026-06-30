@@ -217,6 +217,10 @@ export type TaskDownloadItemResult = {
 export type TaskDownloadResult = {
   downloadedAt: string;
   remoteTasksReceived: number;
+  operationAvailability: {
+    inverse: number;
+    lastMile: number;
+  };
   inserted: number;
   updated: number;
   skippedDirty: number;
@@ -352,6 +356,14 @@ staleLocalManagements =
   return {
     downloadedAt: response.downloadedAt,
     remoteTasksReceived: response.tasks.length,
+    operationAvailability: {
+      inverse: response.tasks.filter(
+        (task) => (task.fieldOperationType ?? 'inverse') === 'inverse'
+      ).length,
+      lastMile: response.tasks.filter(
+        (task) => task.fieldOperationType === 'last_mile'
+      ).length,
+    },
     inserted,
     updated,
     skippedDirty,

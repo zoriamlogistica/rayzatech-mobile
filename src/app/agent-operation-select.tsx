@@ -84,13 +84,30 @@ export default function AgentOperationSelectScreen() {
 
       const downloadResult = await downloadDevTasksToLocalCache();
 
-      await loadAvailability();
+      const localAvailability = await getAgentOperationAvailability();
+      const nextAvailability =
+        localAvailability.inverse > 0 || localAvailability.lastMile > 0
+          ? localAvailability
+          : downloadResult.operationAvailability;
+
+      setAvailability(nextAvailability);
+
+      if (nextAvailability.inverse > 0 && nextAvailability.lastMile === 0) {
+        setSelected('inverse');
+      } else if (
+        nextAvailability.lastMile > 0 &&
+        nextAvailability.inverse === 0
+      ) {
+        setSelected('last_mile');
+      }
 
       Alert.alert(
         'Tareas actualizadas',
         `Tareas recibidas: ${downloadResult.remoteTasksReceived}.\n` +
           `Insertadas: ${downloadResult.inserted}.\n` +
-          `Actualizadas: ${downloadResult.updated}.`
+          `Actualizadas: ${downloadResult.updated}.\n` +
+          `Última milla disponibles: ${nextAvailability.lastMile}.\n` +
+          `Logística inversa disponibles: ${nextAvailability.inverse}.`
       );
     } catch (error) {
       const fieldError = classifyFieldError(error);
