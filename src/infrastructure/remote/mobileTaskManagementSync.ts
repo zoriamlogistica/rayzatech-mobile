@@ -146,6 +146,7 @@ export async function syncTaskManagementToRemote(
       taskObservations: task.observations ?? null,
       scheduledDate: task.scheduledDate ?? null,
       resultStatus: management.resultStatus,
+      managementNumber: management.managementNumber,
       reason: management.reason ?? null,
       observation: management.observation ?? null,
       latitude: management.latitude ?? null,
