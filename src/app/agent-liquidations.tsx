@@ -219,6 +219,7 @@ export default function AgentLiquidationsScreen() {
       const observationParts = [
         'Resultado ultima milla: Liquidado',
         'Subestado: Mercaderia liquidada en almacen',
+        `Evidencias gestion: ${evidencePhotos.map((photo) => photo.id).join(',')}`,
         `Persona recepciona almacen: ${receiverName.trim()}`,
         receiverDocument.trim()
           ? `Documento receptor: ${receiverDocument.trim()}`

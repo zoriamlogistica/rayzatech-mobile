@@ -62,6 +62,25 @@ function managementContainsEvidenceId(
   return ids.includes(evidenceId);
 }
 
+function isLiquidationManagement(
+  management: Awaited<ReturnType<typeof getTaskManagementById>>
+) {
+  const result = getObservationValue(
+    management?.observation,
+    'Resultado ultima milla'
+  );
+
+  return normalizeForCompare(result).includes('liquidado');
+}
+
+function normalizeForCompare(value?: string | null): string {
+  return (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
 export async function syncEvidenceToRemote(
   evidenceId: string
 ): Promise<MobileEvidenceUploadResponse> {
@@ -106,6 +125,12 @@ export async function syncEvidenceToRemote(
     const managements = await listTaskManagementsByTask(evidence.taskId);
     management =
       managements.find((item) => managementContainsEvidenceId(item, evidence.id)) ??
+      (() => {
+        const liquidationManagements = managements.filter(isLiquidationManagement);
+        return liquidationManagements.length === 1
+          ? liquidationManagements[0]
+          : null;
+      })() ??
       null;
   }
 
