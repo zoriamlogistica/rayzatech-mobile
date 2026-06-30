@@ -81,6 +81,52 @@ function mapDownloadedTaskToListItem(task: DownloadedTaskListItem): TaskListItem
   };
 }
 
+function normalizeSearch(value?: string | number | null): string {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function filterFallbackTasks(params: {
+  tasks: TaskListItem[];
+  filter: TaskFilter;
+  search: string;
+  operation: string;
+}) {
+  const query = normalizeSearch(params.search);
+
+  return params.tasks.filter((task) => {
+    if ((task.fieldOperationType ?? 'inverse') !== params.operation) {
+      return false;
+    }
+
+    if (params.filter !== 'all' && task.status !== params.filter) {
+      return false;
+    }
+
+    if (!query) {
+      return true;
+    }
+
+    const searchable = [
+      task.taskNumber,
+      task.orderCode,
+      task.project,
+      task.routeNumber,
+      task.guideNumber,
+      task.customerName,
+      task.customerDocument,
+      task.customerPhone,
+      task.department,
+      task.province,
+      task.district,
+      task.address,
+    ]
+      .map(normalizeSearch)
+      .join(' ');
+
+    return searchable.includes(query);
+  });
+}
+
 export default function AgentTasksScreen() {
   const params = useLocalSearchParams<{ filter?: string }>();
   const initialFilter: TaskFilter =
@@ -100,6 +146,7 @@ export default function AgentTasksScreen() {
   const [searchText, setSearchText] = useState('');
   const [pendingLiquidationCount, setPendingLiquidationCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [fallbackTasks, setFallbackTasks] = useState<TaskListItem[]>([]);
 
   async function handleError(error: unknown) {
     const fieldError = classifyFieldError(error);
@@ -174,9 +221,19 @@ export default function AgentTasksScreen() {
           search: trimmedSearch || undefined,
           fieldOperationType: operation,
         });
+        const fallbackResult =
+          result.length === 0 && fallbackTasks.length > 0
+            ? filterFallbackTasks({
+                tasks: fallbackTasks,
+                filter,
+                search: trimmedSearch,
+                operation,
+              })
+            : [];
+        const visibleResult = result.length > 0 ? result : fallbackResult;
 
-        setTasks(result);
-        setPartialTaskIds(await getPartialTaskIds(result));
+        setTasks(visibleResult);
+        setPartialTaskIds(await getPartialTaskIds(visibleResult));
         setActiveFilter(filter);
       } catch (error) {
         await handleError(error);
@@ -184,7 +241,7 @@ export default function AgentTasksScreen() {
         setIsLoading(false);
       }
     },
-    [activeFilter, searchText, selectedOperation]
+    [activeFilter, fallbackTasks, searchText, selectedOperation]
   );
 
   useFocusEffect(
@@ -203,6 +260,10 @@ export default function AgentTasksScreen() {
       });
 
       const downloadResult = await downloadDevTasksToLocalCache();
+      const downloadedFallbackTasks = downloadResult.downloadedTasks.map(
+        mapDownloadedTaskToListItem
+      );
+      setFallbackTasks(downloadedFallbackTasks);
 
       await loadTasks(activeFilter, searchText, selectedOperation);
       const localAfterDownload = await listCachedTasks({
@@ -212,15 +273,12 @@ export default function AgentTasksScreen() {
       });
 
       if (localAfterDownload.length === 0) {
-        const downloadedVisibleTasks = downloadResult.downloadedTasks
-          .filter(
-            (task) =>
-              (task.fieldOperationType ?? 'inverse') === selectedOperation
-          )
-          .filter((task) =>
-            activeFilter === 'all' ? true : task.status === activeFilter
-          )
-          .map(mapDownloadedTaskToListItem);
+        const downloadedVisibleTasks = filterFallbackTasks({
+          tasks: downloadedFallbackTasks,
+          filter: activeFilter,
+          search: searchText,
+          operation: selectedOperation,
+        });
 
         if (downloadedVisibleTasks.length > 0) {
           setTasks(downloadedVisibleTasks);
