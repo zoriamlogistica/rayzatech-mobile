@@ -138,7 +138,12 @@ export async function syncEvidenceToRemote(
     throw new Error(`EVIDENCE_MANAGEMENT_NOT_FOUND:${evidence.id}`);
   }
 
-  if (!management.remoteId) {
+  const shouldRefreshRemoteManagement =
+    task.fieldOperationType === 'last_mile' &&
+    (managementContainsEvidenceId(management, evidence.id) ||
+      isLiquidationManagement(management));
+
+  if (!management.remoteId || shouldRefreshRemoteManagement) {
     await syncTaskManagementToRemote(management.id);
 
     const refreshedManagement = await getTaskManagementById(management.id);
