@@ -7,6 +7,7 @@ import type { TaskSeries } from '@/domain/tasks/taskSeries.types';
 import { insertTaskEvent } from '@/infrastructure/db/repositories/taskEventRepository';
 import {
   getTaskById,
+  markOldNonLiquidationTasksAsLocallyDeleted,
   markMissingRemoteTasksAsLocallyDeletedForDate,
   updateTaskRemoteMasterData,
   upsertTask,
@@ -273,6 +274,12 @@ export async function downloadDevTasksToLocalCache(): Promise<TaskDownloadResult
   const todayLima = getTodayLimaDate();
 
 const remoteIdsReceived = response.tasks
+  .filter(
+    (task) =>
+      task.scheduledDate === todayLima ||
+      task.hasPendingLiquidation === true ||
+      task.liquidationStatus === 'pending'
+  )
   .map((task) => task.remoteId)
   .filter(Boolean);
 
@@ -289,7 +296,14 @@ const remoteIdsReceived = response.tasks
   const downloadedTasks: DownloadedTaskListItem[] = [];
   const details: TaskDownloadItemResult[] = [];
 
-  for (const remoteTask of response.tasks) {
+  const activeRemoteTasks = response.tasks.filter(
+    (task) =>
+      task.scheduledDate === todayLima ||
+      task.hasPendingLiquidation === true ||
+      task.liquidationStatus === 'pending'
+  );
+
+  for (const remoteTask of activeRemoteTasks) {
     const taskId = localTaskId(remoteTask.remoteId);
 const localTask = await getTaskById(taskId);
 const decision = decideTaskDownloadAction(localTask);
@@ -378,6 +392,9 @@ if (effectiveAction === 'update') {
   scheduledDate: todayLima,
   remoteIds: remoteIdsReceived,
 });
+  await markOldNonLiquidationTasksAsLocallyDeleted({
+    beforeDate: todayLima,
+  });
 
 obsoleteSyncItems =
   await cancelTaskManagementSyncItemsForMissingRemoteTasks(remoteIdsReceived);
@@ -392,12 +409,12 @@ staleLocalManagements =
   
   return {
     downloadedAt: response.downloadedAt,
-    remoteTasksReceived: response.tasks.length,
+    remoteTasksReceived: activeRemoteTasks.length,
     operationAvailability: {
-      inverse: response.tasks.filter(
+      inverse: activeRemoteTasks.filter(
         (task) => (task.fieldOperationType ?? 'inverse') === 'inverse'
       ).length,
-      lastMile: response.tasks.filter(
+      lastMile: activeRemoteTasks.filter(
         (task) => task.fieldOperationType === 'last_mile'
       ).length,
     },

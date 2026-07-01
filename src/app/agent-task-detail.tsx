@@ -28,6 +28,8 @@ import {
   createSuccessfulManagementOffline,
   createUnsuccessfulManagementOffline,
 } from '@/application/tasks/taskManagement.service';
+import { deleteLocalEvidenceIfNotUploaded } from '@/infrastructure/db/repositories/evidenceRepository';
+import { cancelSyncItemsForEntity } from '@/infrastructure/db/repositories/syncQueueRepository';
 import { markTaskPendingLiquidation } from '@/infrastructure/db/repositories/taskRepository';
 import {
   getTaskDetailSnapshot,
@@ -1120,7 +1122,27 @@ async function captureLastMileFacadePhoto() {
   }
 }
 
-function removeLastMileEvidencePhoto(evidenceId: string) {
+async function removeLocalEvidenceBeforeManagement(evidenceId: string) {
+  try {
+    await cancelSyncItemsForEntity({
+      entityType: 'evidence',
+      entityId: evidenceId,
+      error: 'LOCAL_EVIDENCE_REMOVED: Evidence was removed before confirming management.',
+      errorCode: 'LOCAL_EVIDENCE_REMOVED',
+    });
+    await deleteLocalEvidenceIfNotUploaded(evidenceId);
+  } catch (error) {
+    await appLogger.warn({
+      scope: 'AGENT_TASK_DETAIL',
+      message: 'Could not delete removed evidence locally.',
+      error,
+      taskId,
+      payload: { evidenceId },
+    });
+  }
+}
+
+async function removeLastMileEvidencePhoto(evidenceId: string) {
   setLastMileEvidencePhotos((current) => {
     const next = current.filter((photo) => photo.id !== evidenceId);
     return next;
@@ -1131,9 +1153,11 @@ function removeLastMileEvidencePhoto(evidenceId: string) {
   );
   setGeneralEvidenceId(next[0]?.id);
   setGeneralEvidenceUri(next[0]?.uri);
+
+  await removeLocalEvidenceBeforeManagement(evidenceId);
 }
 
-function removeLastMileFacadePhoto(evidenceId: string) {
+async function removeLastMileFacadePhoto(evidenceId: string) {
   setLastMileFacadePhotos((current) => {
     const next = current.filter((photo) => photo.id !== evidenceId);
     return next;
@@ -1142,6 +1166,8 @@ function removeLastMileFacadePhoto(evidenceId: string) {
   const next = lastMileFacadePhotos.filter((photo) => photo.id !== evidenceId);
   setHouseFrontEvidenceId(next[0]?.id);
   setHouseFrontEvidenceUri(next[0]?.uri);
+
+  await removeLocalEvidenceBeforeManagement(evidenceId);
 }
 
 async function captureDeviceLabelEvidencePhoto(deviceFormId: string) {

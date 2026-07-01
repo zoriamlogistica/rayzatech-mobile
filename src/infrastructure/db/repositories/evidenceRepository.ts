@@ -261,6 +261,24 @@ export async function markEvidenceAsLinkedToTask(
   );
 }
 
+export async function deleteLocalEvidenceIfNotUploaded(
+  evidenceId: string
+): Promise<number> {
+  const db = await getDatabase();
+
+  const result = await db.runAsync(
+    `
+      DELETE FROM evidences
+      WHERE id = ?
+        AND remote_id IS NULL
+        AND upload_status IN ('local_only', 'queued', 'upload_failed');
+    `,
+    [evidenceId]
+  );
+
+  return result.changes ?? 0;
+}
+
 export async function markEvidenceUploadAsFailed(params: {
   evidenceId: string;
 }): Promise<void> {

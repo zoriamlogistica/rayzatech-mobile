@@ -23,7 +23,9 @@ import {
 } from '@/application/tasks/taskQuery.service';
 import { createSuccessfulManagementOffline } from '@/application/tasks/taskManagement.service';
 import { AgentScreen } from '@/components/agent-screen';
+import { deleteLocalEvidenceIfNotUploaded } from '@/infrastructure/db/repositories/evidenceRepository';
 import { markTaskLiquidated } from '@/infrastructure/db/repositories/taskRepository';
+import { cancelSyncItemsForEntity } from '@/infrastructure/db/repositories/syncQueueRepository';
 import { captureCurrentLocation } from '@/infrastructure/gps/locationService';
 import { runDevSyncSimulation } from '@/sync/syncEngine';
 
@@ -180,10 +182,27 @@ export default function AgentLiquidationsScreen() {
     }
   }
 
-  function removeEvidencePhoto(evidenceId: string) {
+  async function removeEvidencePhoto(evidenceId: string) {
     setEvidencePhotos((current) =>
       current.filter((photo) => photo.id !== evidenceId)
     );
+
+    try {
+      await cancelSyncItemsForEntity({
+        entityType: 'evidence',
+        entityId: evidenceId,
+        error: 'LOCAL_EVIDENCE_REMOVED: Evidence was removed before confirming management.',
+        errorCode: 'LOCAL_EVIDENCE_REMOVED',
+      });
+      await deleteLocalEvidenceIfNotUploaded(evidenceId);
+    } catch (error) {
+      await appLogger.warn({
+        scope: 'AGENT_LIQUIDATIONS',
+        message: 'Could not delete removed evidence locally.',
+        error,
+        payload: { evidenceId },
+      });
+    }
   }
 
   async function liquidateSelectedTask() {
@@ -357,29 +376,33 @@ export default function AgentLiquidationsScreen() {
             Liquidar pedido {selectedTask.taskNumber ?? selectedTask.id}
           </Text>
 
+          <Text style={styles.inputLabel}>Persona que recibe</Text>
           <TextInput
             style={styles.input}
             value={receiverName}
             onChangeText={setReceiverName}
-            placeholder="Persona que recepciona"
+            placeholder="Nombre y apellido de quien recibe"
           />
+          <Text style={styles.inputLabel}>Documento receptor</Text>
           <TextInput
             style={styles.input}
             value={receiverDocument}
             onChangeText={setReceiverDocument}
-            placeholder="Documento receptor"
+            placeholder="DNI, CE, RUC u otro documento"
           />
+          <Text style={styles.inputLabel}>Área / almacén</Text>
           <TextInput
             style={styles.input}
             value={receiverArea}
             onChangeText={setReceiverArea}
-            placeholder="Area o almacen"
+            placeholder="Área, almacén o zona de recepción"
           />
+          <Text style={styles.inputLabel}>Observaciones</Text>
           <TextInput
             style={[styles.input, styles.textArea]}
             value={observations}
             onChangeText={setObservations}
-            placeholder="Observaciones"
+            placeholder="Describe cualquier detalle de la liquidación"
             multiline
           />
 
@@ -554,6 +577,14 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '900',
     color: '#081f49',
+  },
+  inputLabel: {
+    marginTop: 4,
+    marginBottom: -4,
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#334155',
+    textTransform: 'uppercase',
   },
   input: {
     paddingHorizontal: 12,

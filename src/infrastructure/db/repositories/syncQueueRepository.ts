@@ -292,6 +292,41 @@ export async function markSyncItemAsCancelled(params: {
   );
 }
 
+export async function cancelSyncItemsForEntity(params: {
+  entityType: string;
+  entityId: string;
+  error: string;
+  errorCode?: string;
+}): Promise<number> {
+  const db = await getDatabase();
+  const now = nowIso();
+
+  const result = await db.runAsync(
+    `
+      UPDATE sync_queue
+      SET
+        status = 'cancelled',
+        locked_at = NULL,
+        locked_by = NULL,
+        last_error = ?,
+        last_error_code = ?,
+        updated_at = ?
+      WHERE entity_type = ?
+        AND entity_id = ?
+        AND status IN ('pending', 'failed', 'syncing', 'conflict');
+    `,
+    [
+      params.error,
+      params.errorCode ?? null,
+      now,
+      params.entityType,
+      params.entityId,
+    ]
+  );
+
+  return result.changes ?? 0;
+}
+
 export async function countPendingSyncItems(): Promise<number> {
   const db = await getDatabase();
 

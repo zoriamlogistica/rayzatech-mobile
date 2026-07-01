@@ -721,3 +721,32 @@ export async function markMissingRemoteTasksAsLocallyDeletedForDate(params: {
 
   return result.changes ?? 0;
 }
+
+export async function markOldNonLiquidationTasksAsLocallyDeleted(params: {
+  beforeDate: string;
+}): Promise<number> {
+  const db = await getDatabase();
+  const now = nowIso();
+
+  const result = await db.runAsync(
+    `
+      UPDATE tasks
+      SET
+        status = 'cancelled',
+        deleted_at = ?,
+        sync_status = 'synced',
+        is_dirty = 0,
+        updated_at = ?,
+        local_updated_at = ?
+      WHERE scheduled_date < ?
+        AND deleted_at IS NULL
+        AND is_dirty = 0
+        AND sync_status = 'synced'
+        AND COALESCE(has_pending_liquidation, 0) = 0
+        AND COALESCE(liquidation_status, 'none') <> 'pending';
+    `,
+    [now, now, now, params.beforeDate]
+  );
+
+  return result.changes ?? 0;
+}
