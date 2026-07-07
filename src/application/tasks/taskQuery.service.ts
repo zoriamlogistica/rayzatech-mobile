@@ -36,6 +36,7 @@ export type TaskListFilter = {
   scheduledDate?: string;
   search?: string;
   fieldOperationType?: Task['fieldOperationType'];
+  includeHistorical?: boolean;
 };
 
 export type TaskListItem = {
@@ -164,6 +165,35 @@ function matchesSearch(task: Task, search?: string): boolean {
   return searchableText.includes(normalizedSearch);
 }
 
+function getActiveAgentIds(
+  activeSession: Awaited<ReturnType<typeof getActiveLocalSession>>
+): Set<string> {
+  return new Set(
+    [activeSession?.agentId, activeSession?.userId]
+      .map((value) => value?.trim())
+      .filter((value): value is string => Boolean(value))
+  );
+}
+
+function belongsToActiveAgent(task: Task, activeAgentIds: Set<string>): boolean {
+  if (!task.assignedUserId || activeAgentIds.size === 0) {
+    return true;
+  }
+
+  return activeAgentIds.has(task.assignedUserId);
+}
+
+function hasPendingLiquidation(task: Task): boolean {
+  return (
+    task.hasPendingLiquidation === true ||
+    task.liquidationStatus === 'pending'
+  );
+}
+
+function isCurrentWorkdayTask(task: Task, today: string): boolean {
+  return task.scheduledDate === today || hasPendingLiquidation(task);
+}
+
 function mapTaskToListItem(
   task: Task,
   effectiveStatus: Task['status'] = task.status
@@ -213,16 +243,11 @@ export async function listCachedTasks(
 ): Promise<TaskListItem[]> {
   const tasks = await listTasks();
   const activeSession = await getActiveLocalSession();
-  const activeAgentId = activeSession?.agentId ?? activeSession?.userId;
+  const activeAgentIds = getActiveAgentIds(activeSession);
+  const today = getTodayLimaDate();
 
   const visibleTasks = tasks.filter((task) => {
-      const assignedToAnotherLocalAgent =
-        activeAgentId &&
-        task.assignedUserId &&
-        task.assignedUserId !== activeAgentId &&
-        !task.remoteId;
-
-      if (assignedToAnotherLocalAgent) {
+      if (!belongsToActiveAgent(task, activeAgentIds)) {
         return false;
       }
 
@@ -236,7 +261,15 @@ export async function listCachedTasks(
       if (
         filter?.scheduledDate &&
         task.scheduledDate !== filter.scheduledDate &&
-        !task.hasPendingLiquidation
+        !hasPendingLiquidation(task)
+      ) {
+        return false;
+      }
+
+      if (
+        !filter?.includeHistorical &&
+        !filter?.scheduledDate &&
+        !isCurrentWorkdayTask(task, today)
       ) {
         return false;
       }
@@ -277,6 +310,7 @@ export async function listTodayCachedTasks(): Promise<TaskListItem[]> {
 export async function listPendingCachedTasks(): Promise<TaskListItem[]> {
   return listCachedTasks({
     status: 'pending',
+    scheduledDate: getTodayLimaDate(),
   });
 }
 
@@ -359,16 +393,11 @@ export async function getAgentTaskSummary(filter?: {
 }): Promise<AgentTaskSummary> {
   const tasks = await listTasks();
   const activeSession = await getActiveLocalSession();
-  const activeAgentId = activeSession?.agentId ?? activeSession?.userId;
+  const activeAgentIds = getActiveAgentIds(activeSession);
+  const today = getTodayLimaDate();
 
   const visibleTasks = tasks.filter((task) => {
-    const assignedToAnotherLocalAgent =
-      activeAgentId &&
-      task.assignedUserId &&
-      task.assignedUserId !== activeAgentId &&
-      !task.remoteId;
-
-    if (assignedToAnotherLocalAgent) {
+    if (!belongsToActiveAgent(task, activeAgentIds)) {
       return false;
     }
 
@@ -376,6 +405,10 @@ export async function getAgentTaskSummary(filter?: {
       filter?.fieldOperationType &&
       (task.fieldOperationType ?? 'inverse') !== filter.fieldOperationType
     ) {
+      return false;
+    }
+
+    if (!isCurrentWorkdayTask(task, today)) {
       return false;
     }
 
@@ -476,17 +509,15 @@ function getEffectiveTaskStatus(
 export async function getAgentOperationAvailability(): Promise<AgentOperationAvailability> {
   const tasks = await listTasks();
   const activeSession = await getActiveLocalSession();
-  const activeAgentId = activeSession?.agentId ?? activeSession?.userId;
+  const activeAgentIds = getActiveAgentIds(activeSession);
+  const today = getTodayLimaDate();
 
   const visibleTasks = tasks.filter((task) => {
-    const hasRemoteAuthenticatedTask = Boolean(task.remoteId);
-    const assignedToAnotherLocalAgent =
-      activeAgentId &&
-      task.assignedUserId &&
-      task.assignedUserId !== activeAgentId &&
-      !hasRemoteAuthenticatedTask;
+    if (!belongsToActiveAgent(task, activeAgentIds)) {
+      return false;
+    }
 
-    if (assignedToAnotherLocalAgent) {
+    if (!isCurrentWorkdayTask(task, today)) {
       return false;
     }
 
